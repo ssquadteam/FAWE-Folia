@@ -1,0 +1,101 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Make Gradle executable
+        run: chmod +x ./gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew --no-daemon clean build
+
+      - name: Determine version and artifact
+        id: vars
+        shell: bash
+        run: |
+          # Extract version from gradle.properties or build output
+          VERSION=$(./gradlew -q properties --project-dir . | awk -F": " '/^version:/ {print $2; exit}')
+          if [[ -z "$VERSION" ]]; then
+            # Fallback: extract from jar filename
+            VERSION=$(ls worldedit-bukkit/build/libs/FastAsyncWorldEdit-Paper-*.jar 2>/dev/null | head -n 1 | sed 's/.*Paper-\(.*\)\.jar/\1/')
+          fi
+          if [[ -z "$VERSION" ]]; then
+            echo "Failed to determine version" >&2
+            exit 1
+          fi
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          TAG="v${VERSION//-SNAPSHOT/}-${SHORT_SHA}"
+          RELEASE_NAME="FastAsyncWorldEdit ${VERSION} - ${SHORT_SHA}"
+          
+          # Find the Paper artifact
+          ARTIFACT=$(ls worldedit-bukkit/build/libs/FastAsyncWorldEdit-Paper-*.jar 2>/dev/null | head -n 1 || true)
+          if [[ -z "$ARTIFACT" ]]; then
+            echo "Could not find FastAsyncWorldEdit-Paper JAR" >&2
+            ls -la worldedit-bukkit/build/libs || true
+            exit 1
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "name=${RELEASE_NAME}" >> $GITHUB_OUTPUT
+          echo "artifact=${ARTIFACT}" >> $GITHUB_OUTPUT
+
+      - name: Generate release notes
+        id: notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          CURRENT_TAG="${{ steps.vars.outputs.tag }}"
+          # Find previous tag matching v*
+          PREV_TAG=$(git tag --list 'v*' --sort=-v:refname | head -n 1 || true)
+          if [[ "$PREV_TAG" == "$CURRENT_TAG" ]]; then
+            PREV_TAG=$(git tag --list 'v*' --sort=-v:refname | sed -n '2p' || true)
+          fi
+          if [[ -n "$PREV_TAG" ]]; then
+            echo "## Changelog from $PREV_TAG" > RELEASE_NOTES.md
+            echo >> RELEASE_NOTES.md
+            git log ${PREV_TAG}..HEAD --pretty=format:'- %s (%h)' >> RELEASE_NOTES.md || true
+          else
+            echo "## Changelog" > RELEASE_NOTES.md
+            echo >> RELEASE_NOTES.md
+            git log --pretty=format:'- %s (%h)' -n 100 >> RELEASE_NOTES.md || true
+          fi
+          echo >> RELEASE_NOTES.md
+          echo "notes_file=RELEASE_NOTES.md" >> $GITHUB_OUTPUT
+
+      - name: Create or update GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.vars.outputs.tag }}"
+          NAME="${{ steps.vars.outputs.name }}"
+          ARTIFACT="${{ steps.vars.outputs.artifact }}"
+          NOTES_FILE="${{ steps.notes.outputs.notes_file }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG exists. Updating..."
+            gh release upload "$TAG" "$ARTIFACT" --clobber
+            gh release edit "$TAG" --title "$NAME" --notes-file "$NOTES_FILE"
+          else
+            echo "Creating release $TAG"
+            gh release create "$TAG" "$ARTIFACT" --title "$NAME" --notes-file "$NOTES_FILE"
+          fi
