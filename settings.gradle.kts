@@ -21,6 +21,15 @@ dependencyResolutionManagement {
                 excludeGroup("net.kyori")
             }
         }
+        // FAWE-Folia: paperweight resolves the adapters' yarn param mappings against this handler.
+        // EngineHub's mirrors 404 for them, so a build with a cold cache cannot resolve adapter-1_21.
+        maven {
+            name = "FabricMC"
+            url = uri("https://maven.fabricmc.net/")
+            content {
+                includeGroup("net.fabricmc")
+            }
+        }
         mavenCentral()
     }
 }
