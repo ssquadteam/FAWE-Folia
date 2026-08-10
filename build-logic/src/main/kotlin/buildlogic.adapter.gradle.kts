@@ -54,7 +54,7 @@ repositories {
         logger.lifecycle(
             "FAWE-Folia repo diagnostic for {}: {}",
             project.path,
-            repositories.filterIsInstance<MavenArtifactRepository>().joinToString { "${'$'}{it.name}=${'$'}{it.url}" }
+            repositories.filterIsInstance<MavenArtifactRepository>().joinToString { it.name + "=" + it.url }
         )
     }
 }
