@@ -11,6 +11,9 @@ private val ALLOWED_PREFIXES = listOf(
     "https://repo.maven.apache.org/maven2/",
     "https://s01.oss.sonatype.org/content/repositories/snapshots/",
     "https://plugins.gradle.org",
+    // FAWE-Folia: yarn param mappings for the older adapters are absent from both EngineHub mirrors
+    // (404 on /repo and /artifactory/fabricmc), so a cold build cannot resolve them without upstream.
+    "https://maven.fabricmc.net",
     "file:"
 )
 private val LOGGER = Logging.getLogger("repositoriesHelper")

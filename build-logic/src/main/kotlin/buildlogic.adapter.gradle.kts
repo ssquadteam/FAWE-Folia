@@ -38,6 +38,15 @@ repositories {
         }
     }*/
     mavenCentral()
+    // FAWE-Folia: paperweight resolves yarn param mappings for the older adapters here. EngineHub's
+    // mirrors 404 for them, so without this a build with a cold cache cannot resolve adapter-1_21.
+    maven {
+        name = "FabricMC"
+        url = uri("https://maven.fabricmc.net/")
+        content {
+            includeGroup("net.fabricmc")
+        }
+    }
     afterEvaluate {
         killNonEngineHubRepositories()
     }
