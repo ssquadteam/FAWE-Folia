@@ -8,10 +8,11 @@ plugins {
     id("io.papermc.paperweight.userdev")
 }
 
+val requiresReobfJar = project.name.startsWith("adapter-1_")
+
 paperweight {
     injectPaperRepository = false
-    // TODO: switch back to REOBF when paper releases mappings
-    reobfArtifactConfiguration = io.papermc.paperweight.userdev.ReobfArtifactConfiguration.MOJANG_PRODUCTION
+    reobfArtifactConfiguration = io.papermc.paperweight.userdev.ReobfArtifactConfiguration.REOBF_PRODUCTION
 }
 
 repositories {
@@ -19,27 +20,23 @@ repositories {
         name = "PaperMC"
         url = uri("https://repo.papermc.io/repository/maven-public/")
         content {
-            excludeModule("io.papermc.paper", "dev-bundle")
+            // excludeModule("io.papermc.paper", "dev-bundle")
         }
     }
     maven {
         name = "EngineHub Repository"
         url = uri("https://maven.enginehub.org/repo/")
         content {
-            excludeModule("io.papermc.paper", "dev-bundle")
+            // excludeModule("io.papermc.paper", "dev-bundle")
         }
     }
-    maven {
+/*    maven {
         name = "IntellectualSites"
         url = uri("https://repo.intellectualsites.dev/repository/paper-dev-bundles/")
         content {
-            includeModule("io.papermc.paper", "dev-bundle")
+            // includeModule("io.papermc.paper", "dev-bundle")
         }
-    }
-    maven {
-        name = "TCodedReleases"
-        url = uri("https://repo.tcoded.com/releases")
-    }
+    }*/
     mavenCentral()
     afterEvaluate {
         killNonEngineHubRepositories()
@@ -48,7 +45,6 @@ repositories {
 
 dependencies {
     implementation(project(":worldedit-bukkit"))
-    compileOnly("com.tcoded:FoliaLib:0.5.1")
     constraints {
         //Reduces the amount of libraries Gradle and IntelliJ need to resolve
         implementation("net.kyori:adventure-bom") {
@@ -58,10 +54,16 @@ dependencies {
     }
 }
 
-// TODO: re-enable when paper releases mappings
-/* tasks.named("assemble") {
-    dependsOn("reobfJar")
-} */
+java {
+    // Required when we de-sync release option and declared Java versions.
+    disableAutoTargetJvm()
+}
+
+tasks.named("assemble") {
+    if (requiresReobfJar) {
+        dependsOn("reobfJar")
+    }
+}
 
 tasks.named<Javadoc>("javadoc") {
     enabled = false

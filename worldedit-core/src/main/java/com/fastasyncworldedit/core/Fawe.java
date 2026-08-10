@@ -43,64 +43,44 @@ import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * [ WorldEdit action ]
  * <br>
- * [ EditSession ] - The change is processed (area restrictions, change limit,
- * block type)
+ * [ EditSession ] - The change is processed (area restrictions, change limit, block type)
  * <br>
  * [ Block change ] - A block change from some location
  * <br>
  * [ Set Queue ] - The SetQueue manages the implementation specific queue
  * <br>
- * [ Fawe Queue] - A queue of chunks - check if the queue has the chunk for a
- * change
+ * [ Fawe Queue] - A queue of chunks - check if the queue has the chunk for a change
  * <br>
- * [ Fawe Chunk Implementation ] - Otherwise create a new FaweChunk object which
- * is a wrapper around the Chunk object
+ * [ Fawe Chunk Implementation ] - Otherwise create a new FaweChunk object which is a wrapper around the Chunk object
  * <br>
- * [ Execution ] - When done, the queue then sets the blocks for the chunk,
- * performs lighting updates and sends the chunk packet to the clients
+ * [ Execution ] - When done, the queue then sets the blocks for the chunk, performs lighting updates and sends the chunk packet to the clients
  * <p>
  * Why it's faster:
- * <br>
- * The chunk is modified directly rather than through the API
+ * <br> The chunk is modified directly rather than through the API
  * - Removes some overhead, and means some processing can be done async
- * <br>
- * Lighting updates are performed on the chunk level rather than for every block
- * - e.g., A blob of stone: only the visible blocks need to have the lighting
- * calculated
- * <br>
- * Block changes are sent with a chunk packet
- * - A chunk packet is generally quicker to create and smaller for large world
- * edits
- * <br>
- * No physics updates
+ * <br> Lighting updates are performed on the chunk level rather than for every block
+ * - e.g., A blob of stone: only the visible blocks need to have the lighting calculated
+ * <br> Block changes are sent with a chunk packet
+ * - A chunk packet is generally quicker to create and smaller for large world edits
+ * <br> No physics updates
  * - Physics updates are slow, and are usually performed on each block
- * <br>
- * Block data shortcuts
- * - Some known blocks don't need to have the data set or accessed (e.g., air is
- * never going to have data)
- * <br>
- * Remove redundant extents
+ * <br> Block data shortcuts
+ * - Some known blocks don't need to have the data set or accessed (e.g., air is never going to have data)
+ * <br> Remove redundant extents
  * - Up to 11 layers of extents can be removed
- * <br>
- * History bypassing
- * - FastMode bypasses history and means blocks in the world don't need to be
- * checked and recorded
+ * <br> History bypassing
+ * - FastMode bypasses history and means blocks in the world don't need to be checked and recorded
  */
 public class Fawe {
 
     private static final Logger LOGGER = LogManagerCompat.getLogger();
 
     private static Fawe instance;
-
-    /**
-     * Whether the server is running Folia.
-     * This is set by the platform implementation at startup.
-     */
-    private static boolean isFoliaServer = false;
 
     /**
      * The ticks-per-second timer.
@@ -124,8 +104,8 @@ public class Fawe {
          * Implementation dependent stuff
          */
         this.setupConfigs();
-        FaweLimit.MAX.CONFIRM_LARGE = Settings.settings().LIMITS.get("default").CONFIRM_LARGE
-                || Settings.settings().GENERAL.LIMIT_UNLIMITED_CONFIRMS;
+        FaweLimit.MAX.CONFIRM_LARGE =
+                Settings.settings().LIMITS.get("default").CONFIRM_LARGE || Settings.settings().GENERAL.LIMIT_UNLIMITED_CONFIRMS;
         TaskManager.IMP = this.implementation.getTaskManager();
 
         TaskManager.taskManager().async(() -> {
@@ -133,12 +113,14 @@ public class Fawe {
                     MainUtil.getFile(this.implementation
                             .getDirectory(), Settings.settings().PATHS.HISTORY),
                     TimeUnit.DAYS.toMillis(Settings.settings().HISTORY.DELETE_AFTER_DAYS),
-                    false);
+                    false
+            );
             MainUtil.deleteOlder(
                     MainUtil.getFile(this.implementation
                             .getDirectory(), Settings.settings().PATHS.CLIPBOARD),
                     TimeUnit.DAYS.toMillis(Settings.settings().CLIPBOARD.DELETE_AFTER_DAYS),
-                    false);
+                    false
+            );
         });
 
         /*
@@ -163,12 +145,12 @@ public class Fawe {
                 0L,
                 TimeUnit.MILLISECONDS,
                 new LinkedBlockingQueue<>(),
-                new UUIDKeyQueuedThreadFactory()));
+                new UUIDKeyQueuedThreadFactory()
+        ));
     }
 
     /**
      * Get the implementation specific class.
-     * 
      * @deprecated use {@link #platform()}
      */
     @SuppressWarnings("unchecked")
@@ -179,7 +161,6 @@ public class Fawe {
 
     /**
      * Get the implementation specific class.
-     * 
      * @since 2.0.0
      */
     @SuppressWarnings("unchecked")
@@ -187,9 +168,9 @@ public class Fawe {
         return instance != null ? (T) instance.implementation : null;
     }
 
+
     /**
      * Get the implementation independent class.
-     * 
      * @deprecated use {@link #instance()}
      */
     @Deprecated(forRemoval = true, since = "2.0.0")
@@ -205,13 +186,11 @@ public class Fawe {
     }
 
     /**
-     * This method is not for public use. If you have to ask what it does then you
-     * shouldn't be using it.
+     * This method is not for public use. If you have to ask what it does then you shouldn't be using it.
      */
     public static void set(final IFawe implementation) throws InstanceAlreadyExistsException, IllegalArgumentException {
         if (instance != null) {
-            throw new InstanceAlreadyExistsException(
-                    "FAWE has already been initialized with: " + instance.implementation);
+            throw new InstanceAlreadyExistsException("FAWE has already been initialized with: " + instance.implementation);
         }
         if (implementation == null) {
             throw new IllegalArgumentException("Implementation may not be null.");
@@ -233,36 +212,11 @@ public class Fawe {
     }
 
     /**
-     * Check if the server is running Folia.
-     * This is set by the platform implementation (e.g., FoliaLibHolder) at startup.
-     *
-     * @return true if running on Folia, false otherwise
-     * @since 2.14.4
-     */
-    public static boolean isFoliaServer() {
-        return isFoliaServer;
-    }
-
-    /**
-     * Set whether the server is running Folia.
-     * This should only be called by the platform implementation at startup.
-     *
-     * @param isFolia true if running on Folia, false otherwise
-     * @since 2.14.4
-     */
-    public static void setFoliaServer(boolean isFolia) {
-        isFoliaServer = isFolia;
-    }
-
-    /**
-     * Non-api. Handles an input FAWE exception if not already handled, given the
-     * input boolean array.
-     * Looks at the {@link FaweException.Type} and decides what to do (rethrows if
-     * we want to attempt to show the error to the
+     * Non-api. Handles an input FAWE exception if not already handled, given the input boolean array.
+     * Looks at the {@link FaweException.Type} and decides what to do (rethrows if we want to attempt to show the error to the
      * player, outputs to console where necessary).
      *
-     * @param faweExceptionReasonsUsed boolean array that should be cached where
-     *                                 this method is called from of length {@code
+     * @param faweExceptionReasonsUsed boolean array that should be cached where this method is called from of length {@code
      *                                 FaweException.Type.values().length}
      * @param e                        {@link FaweException} to handle
      * @param logger                   {@link Logger} of the calling class
@@ -270,7 +224,8 @@ public class Fawe {
     public static void handleFaweException(
             boolean[] faweExceptionReasonsUsed,
             FaweException e,
-            final Logger logger) {
+            final Logger logger
+    ) {
         FaweException.Type type = e.getType();
         switch (type) {
             case OTHER:
@@ -324,8 +279,7 @@ public class Fawe {
     }
 
     public TextureUtil getCachedTextureUtil(boolean randomize, int min, int max) {
-        // TODO NOT IMPLEMENTED - optimize this by caching the default true/0/100
-        // texture util
+        // TODO NOT IMPLEMENTED - optimize this by caching the default true/0/100 texture util
         TextureUtil tu = getTextureUtil();
         try {
             tu = min == 0 && max == 100 ? tu : new CleanTextureUtil(tu, min, max);
@@ -381,7 +335,7 @@ public class Fawe {
         File file = new File(this.implementation.getDirectory(), "config.yml");
         Settings.settings().PLATFORM = implementation.getPlatform().replace("\"", "");
         try (InputStream stream = getClass().getResourceAsStream("/fawe.properties");
-                BufferedReader br = new BufferedReader(new InputStreamReader(stream))) {
+             BufferedReader br = new BufferedReader(new InputStreamReader(stream))) {
             String versionString = br.readLine();
             String commitString = br.readLine();
             String dateString = br.readLine();
@@ -389,8 +343,7 @@ public class Fawe {
             this.version = FaweVersion.tryParse(versionString, commitString, dateString);
             Settings.settings().DATE = new Date(100 + version.year, version.month, version.day).toString();
             Settings.settings().BUILD = "https://ci.athion.net/job/FastAsyncWorldEdit/" + version.build;
-            Settings.settings().COMMIT = "https://github.com/IntellectualSites/FastAsyncWorldEdit/commit/"
-                    + Integer.toHexString(version.hash);
+            Settings.settings().COMMIT = "https://github.com/IntellectualSites/FastAsyncWorldEdit/commit/" + Integer.toHexString(version.hash);
         } catch (Throwable ignored) {
         }
         try {
@@ -400,25 +353,28 @@ public class Fawe {
         }
         Settings.settings().QUEUE.TARGET_SIZE = Math.max(
                 Settings.settings().QUEUE.TARGET_SIZE,
-                Settings.settings().QUEUE.PARALLEL_THREADS);
+                Settings.settings().QUEUE.PARALLEL_THREADS
+        );
         if (Settings.settings().QUEUE.TARGET_SIZE < 4 * Settings.settings().QUEUE.PARALLEL_THREADS) {
             LOGGER.error(
                     "queue.target-size is {}, and queue.parallel_threads is {}. It is HIGHLY recommended that queue" +
                             ".target-size be at least four times queue.parallel-threads or greater.",
                     Settings.settings().QUEUE.TARGET_SIZE,
-                    Settings.settings().QUEUE.PARALLEL_THREADS);
+                    Settings.settings().QUEUE.PARALLEL_THREADS
+            );
         }
         if (Settings.settings().HISTORY.DELETE_DISK_ON_LOGOUT && Settings.settings().HISTORY.USE_DATABASE) {
-            LOGGER.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-            LOGGER.warn("!!!                                                                !!!");
-            LOGGER.warn("!!!    Using history database whilst deleting disk history!        !!!");
-            LOGGER.warn("!!!    You will not be able to rollback edits after a user logs    !!!");
-            LOGGER.warn("!!!    out, recommended to disable delete-disk-on-logout if you    !!!");
-            LOGGER.warn("!!!    you want to have full history rollback functionality.       !!!");
-            LOGGER.warn("!!!    Disable use-database if you do not need to have rollback    !!!");
-            LOGGER.warn("!!!    functionality and wish to disable this warning.             !!!");
-            LOGGER.warn("!!!                                                                !!!");
-            LOGGER.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+            LOGGER.warn("""
+                    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                    !!!                                                                !!!
+                    !!!    Using history database whilst deleting disk history!        !!!
+                    !!!    You will not be able to rollback edits after a user logs    !!!
+                    !!!    out, recommended to disable delete-disk-on-logout if you    !!!
+                    !!!    want to have full history rollback functionality.           !!!
+                    !!!    Disable use-database if you do not need to have rollback    !!!
+                    !!!    functionality and wish to disable this warning.             !!!
+                    !!!                                                                !!!
+                    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!""");
         }
         try {
             byte[] in = new byte[0];
@@ -437,12 +393,9 @@ public class Fawe {
             assert (Zstd.decompress(ob, compressed) == 0);
             LOGGER.info("ZSTD Compression Binding loaded successfully");
         } catch (Throwable e) {
-            if (Settings.settings().CLIPBOARD.COMPRESSION_LEVEL > 6
-                    || Settings.settings().HISTORY.COMPRESSION_LEVEL > 6) {
-                Settings.settings().CLIPBOARD.COMPRESSION_LEVEL = Math.min(6,
-                        Settings.settings().CLIPBOARD.COMPRESSION_LEVEL);
-                Settings.settings().HISTORY.COMPRESSION_LEVEL = Math.min(6,
-                        Settings.settings().HISTORY.COMPRESSION_LEVEL);
+            if (Settings.settings().CLIPBOARD.COMPRESSION_LEVEL > 6 || Settings.settings().HISTORY.COMPRESSION_LEVEL > 6) {
+                Settings.settings().CLIPBOARD.COMPRESSION_LEVEL = Math.min(6, Settings.settings().CLIPBOARD.COMPRESSION_LEVEL);
+                Settings.settings().HISTORY.COMPRESSION_LEVEL = Math.min(6, Settings.settings().HISTORY.COMPRESSION_LEVEL);
                 LOGGER.error("ZSTD Compression Binding Not Found.\n"
                         + "FAWE will still work but compression won't work as well.", e);
             }
@@ -462,26 +415,31 @@ public class Fawe {
             final MemoryMXBean memBean = ManagementFactory.getMemoryMXBean();
             final NotificationEmitter ne = (NotificationEmitter) memBean;
 
+            AtomicLong lastWarn = new AtomicLong(System.currentTimeMillis());
             ne.addNotificationListener((notification, handback) -> {
                 final long heapSize = Runtime.getRuntime().totalMemory();
                 final long heapMaxSize = Runtime.getRuntime().maxMemory();
                 if (heapSize < heapMaxSize) {
                     return;
                 }
-                LOGGER.warn("High memory usage detected, FAWE will attempt to slow operations to prevent a crash.");
+                final long time = System.currentTimeMillis();
+                if (time > lastWarn.get() + TimeUnit.SECONDS.toMillis(30)) {
+                    lastWarn.set(time);
+                    LOGGER.warn("High memory usage detected, FAWE will attempt to slow operations to prevent a crash.");
+                }
                 MemUtil.memoryLimitedTask();
             }, null, null);
 
             final List<MemoryPoolMXBean> memPools = ManagementFactory.getMemoryPoolMXBeans();
             for (final MemoryPoolMXBean mp : memPools) {
-                if (mp.isUsageThresholdSupported()) {
+                if (mp.isCollectionUsageThresholdSupported()) {
                     final MemoryUsage mu = mp.getUsage();
                     final long max = mu.getMax();
                     if (max < 0) {
                         continue;
                     }
                     final long alert = (max * Settings.settings().MAX_MEMORY_PERCENT) / 100;
-                    mp.setUsageThreshold(alert);
+                    mp.setCollectionUsageThreshold(alert);
                 }
             }
         } catch (Throwable ignored) {
@@ -506,17 +464,13 @@ public class Fawe {
     }
 
     /**
-     * Gets the executor used for clipboard IO if clipboard on disk is enabled or
-     * null
+     * Gets the executor used for clipboard IO if clipboard on disk is enabled or null
      *
-     * @return Executor used for clipboard IO if clipboard on disk is enabled or
-     *         null
+     * @return Executor used for clipboard IO if clipboard on disk is enabled or null
      * @since 2.6.2
      * @deprecated Use any of {@link Fawe#submitUUIDKeyQueuedTask(UUID, Runnable)},
-     *             {@link Fawe#submitUUIDKeyQueuedTask(UUID, Runnable, Object)},
-     *             {@link Fawe#submitUUIDKeyQueuedTask(UUID, Callable)}
-     *             to ensure if a thread is already a UUID-queued thread, the task
-     *             is immediately run
+     * {@link Fawe#submitUUIDKeyQueuedTask(UUID, Runnable, Object)}, {@link Fawe#submitUUIDKeyQueuedTask(UUID, Callable)}
+     * to ensure if a thread is already a UUID-queued thread, the task is immediately run
      */
     @Deprecated(forRemoval = true, since = "2.12.1")
     public KeyQueuedExecutorService<UUID> getClipboardExecutor() {

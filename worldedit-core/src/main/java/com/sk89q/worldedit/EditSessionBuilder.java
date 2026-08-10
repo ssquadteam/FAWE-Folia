@@ -468,13 +468,21 @@ public final class EditSessionBuilder {
         if (sideEffectSet == null) {
             sideEffectSet = fastMode ? FAST_SIDE_EFFECTS : SideEffectSet.defaults();
         }
+        if (!fastMode && actor != null) {
+            sideEffectSet = sideEffectSet.with(
+                    SideEffect.ENTITY_EVENTS,
+                    limit.SKIP_ENTITY_SPAWN_EVENTS ? SideEffect.State.OFF : SideEffect.State.ON
+            );
+        }
         if (checkMemory == null) {
             checkMemory = actor != null && !this.fastMode;
         }
         if (checkMemory) {
             if (MemUtil.isMemoryLimitedSlow()) {
-                if (Permission.hasPermission(actor, "worldedit.fast")) {
+                if (actor != null && Permission.hasPermission(actor, "worldedit.fast")) {
                     actor.print(Caption.of("fawe.info.worldedit.oom.admin"));
+                } else {
+                    LOGGER.warn("Low memory");
                 }
                 throw FaweCache.LOW_MEMORY;
             }
@@ -802,24 +810,21 @@ public final class EditSessionBuilder {
                 }
             }
             if (Settings.settings().EXTENT.DEBUG) {
+                String blockedClassName = toReturn.getClass().getName();
                 if (event.getActor() != null) {
-                    event.getActor().printDebug(TextComponent.of("Potentially unsafe extent blocked: " + toReturn
-                            .getClass()
-                            .getName()));
+                    event.getActor().printDebug(TextComponent.of("Potentially unsafe extent blocked: " + blockedClassName));
                     event.getActor().print(TextComponent.of(
                             "- For area restrictions and block logging, it is recommended that third party plugins use the FAWE" +
                                     " API"));
                     event.getActor().print(TextComponent.of("- Add the following line to the `allowed-plugins` list in the " +
                             "FAWE config.yml to let FAWE recognize the extent:"));
-                    event.getActor().print(toReturn.getClass().getName());
+                    event.getActor().print(blockedClassName);
                 } else {
-                    LOGGER.warn("Potentially unsafe extent blocked: {}", toReturn.getClass().getName());
-                    LOGGER.warn(
-                            " - For area restrictions and block logging, it is recommended that third party plugins use the FAWE API");
-                    LOGGER.warn(
-                            " - Add the following classpath to the `allowed-plugins` list in the FAWE config.yml to let FAWE " +
-                                    "recognize the extent:");
-                    LOGGER.warn(toReturn.getClass().getName());
+                    LOGGER.warn("""
+                            Potentially unsafe extent blocked: {}
+                             - For area restrictions and block logging, it is recommended that third party plugins use the FAWE API
+                             - Add the following classpath to the `allowed-plugins` list in the FAWE config.yml to let FAWE recognize the extent:
+                            {}""", blockedClassName, blockedClassName);
                 }
             }
         }

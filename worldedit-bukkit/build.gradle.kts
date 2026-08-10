@@ -27,29 +27,14 @@ repositories {
     }
     mavenCentral()
     maven {
-        name = "TCodedReleases"
-        url = uri("https://repo.tcoded.com/releases")
-    }
-    maven {
-        name = "JitPack"
-        url = uri("https://jitpack.io")
-        content {
-            includeGroup("com.github.Zrips")
-            includeGroup("com.github.MilkBowl")
-            includeGroup("com.github.TechFortress")
-        }
-    }
-    maven {
-        name = "GriefDefender"
-        url = uri("https://repo.glaremasters.me/repository/bloodshot/")
+        // mirroring + caching from unstable third-party repositories for community plugins (partially limited by routing rules)
+        // (currently Residence, GriefPrevention, GriefDefender, Towny)
+        name = "IntellectualSites Repository"
+        url = uri("https://repo.intellectualsites.dev/repository/maven-all/")
     }
     maven {
         name = "OSS Sonatype Snapshots"
         url = uri("https://oss.sonatype.org/content/repositories/snapshots/")
-    }
-    maven {
-        name = "Glaremasters"
-        url = uri("https://repo.glaremasters.me/repository/towny/")
     }
     flatDir { dir(File("src/main/resources")) }
 }
@@ -80,7 +65,20 @@ val adaptersReobf = configurations.create("adaptersReobf") {
     attributes {
         attribute(Obfuscation.OBFUSCATION_ATTRIBUTE, objects.named(Obfuscation.OBFUSCATED))
     }
-    extendsFrom(adapters)
+}
+
+allprojects {
+    configurations.configureEach {
+        resolutionStrategy {
+            capabilitiesResolution {
+                withCapability("org.lz4:lz4-java") {
+                    select(candidates.first {
+                        (it.id as org.gradle.api.artifacts.component.ModuleComponentIdentifier).group == "at.yawk.lz4"
+                    })
+                }
+            }
+        }
+    }
 }
 
 dependencies {
@@ -97,7 +95,6 @@ dependencies {
     localImplementation(libs.log4j.api)
 
     implementation(libs.paperLib)
-    implementation(libs.foliaLib)
     compileOnly(libs.vault) { isTransitive = false }
     compileOnly(libs.dummypermscompat) {
         exclude("com.github.MilkBowl", "VaultAPI")
@@ -108,6 +105,9 @@ dependencies {
 
     project.project(":worldedit-bukkit:adapters").subprojects.forEach {
         "adapters"(project(it.path))
+        if (it.name.startsWith("adapter-1_")) {
+            "adaptersReobf"(project(it.path))
+        }
     }
     compileOnly(libs.worldguard) {
         exclude("com.sk89q.worldedit", "worldedit-bukkit")
@@ -121,6 +121,7 @@ dependencies {
     compileOnly(libs.towny) { isTransitive = false }
     compileOnly(libs.plotsquared.bukkit) { isTransitive = false }
     compileOnly(libs.plotsquared.core) { isTransitive = false }
+    compileOnly(libs.guice)
 
     // Third party
     implementation(libs.serverlib)
@@ -220,9 +221,6 @@ tasks.withType<ShadowJar>().configureEach {
         relocate("io.papermc.lib", "com.sk89q.worldedit.bukkit.paperlib") {
             include(dependency("io.papermc:paperlib"))
         }
-        relocate("com.tcoded.folialib", "com.fastasyncworldedit.bukkit.folialib") {
-            include(dependency("com.tcoded:FoliaLib"))
-        }
         relocate("net.royawesome.jlibnoise", "com.sk89q.worldedit.jlibnoise") {
             include(dependency("com.sk89q.lib:jlibnoise"))
         }
@@ -252,8 +250,7 @@ tasks.withType<ShadowJar>().configureEach {
 
 tasks.named("assemble").configure {
     dependsOn("shadowJar")
-    // TODO: re-enable when paper releases mappings
-    // dependsOn("reobfShadowJar")
+    dependsOn("reobfShadowJar")
 }
 
 publishMods {
@@ -271,11 +268,10 @@ publishMods {
 
     // We publish the reobfJar twice to ensure that the modrinth download menu picks the right jar for the platform regardless
     // of minecraft version.
-    val mojmapPaperVersions = listOf("1.20.6", "1.21.1", "1.21.4", "1.21.5", "1.21.6", "1.21.7", "1.21.8", "1.21.9", "1.21.10",
-            "1.21.11")
-    val spigotMappedPaperVersions = listOf("1.20.2", "1.20.4")
+    val mojmapPaperVersions = listOf("1.21.1", "1.21.4", "1.21.5", "1.21.6", "1.21.7", "1.21.8", "1.21.9", "1.21.10",
+            "1.21.11", "26.1", "26.1.1", "26.1.2", "26.2")
 
-    // Mark reobfJar as spigot only for 1.20.5+
+    // Mark reobfJar as spigot
     modrinth("spigot") {
         from(common)
         file = tasks.named<ShadowJar>("reobfShadowJar").flatMap { it.archiveFile }
@@ -283,15 +279,7 @@ publishMods {
         modLoaders = listOf("spigot")
     }
 
-    // Mark reobfJar as spigot & paper for <1.20.5
-    modrinth("spigotAndOldPaper") {
-        from(common)
-        file = tasks.named<ShadowJar>("reobfShadowJar").flatMap { it.archiveFile }
-        minecraftVersions = spigotMappedPaperVersions
-        modLoaders = listOf("paper", "spigot")
-    }
-
-    // Mark mojang mapped jar as paper 1.20.5+ only
+    // Mark mojang mapped jar as paper
     modrinth {
         from(common)
         file = tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile }

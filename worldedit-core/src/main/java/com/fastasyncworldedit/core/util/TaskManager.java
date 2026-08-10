@@ -89,8 +89,7 @@ public abstract class TaskManager {
     /**
      * Run a bunch of tasks in parallel using the shared thread pool.
      *
-     * @deprecated Deprecated without replacement as unused internally, and poor
-     *             implementation of what it's designed to do.
+     * @deprecated Deprecated without replacement as unused internally, and poor implementation of what it's designed to do.
      */
     @Deprecated(forRemoval = true, since = "2.7.0")
     public void parallel(Collection<Runnable> runables) {
@@ -105,8 +104,7 @@ public abstract class TaskManager {
      *
      * @param runnables  the tasks to run
      * @param numThreads number of threads (null = config.yml parallel threads)
-     * @deprecated Deprecated without replacement as unused internally, and poor
-     *             implementation of what it's designed to do.
+     * @deprecated Deprecated without replacement as unused internally, and poor implementation of what it's designed to do.
      */
     @Deprecated(forRemoval = true, since = "2.7.0")
     public void parallel(Collection<Runnable> runnables, @Nullable Integer numThreads) {
@@ -225,6 +223,7 @@ public abstract class TaskManager {
         }
     }
 
+
     /**
      * Run a task later on the main thread.
      *
@@ -277,8 +276,7 @@ public abstract class TaskManager {
     }
 
     /**
-     * @deprecated Deprecated without replacement as unused internally, and poor
-     *             implementation of what it's designed to do.
+     * @deprecated Deprecated without replacement as unused internally, and poor implementation of what it's designed to do.
      */
     @Deprecated(forRemoval = true, since = "2.7.0")
     public void wait(AtomicBoolean running, int timeout) {
@@ -288,8 +286,7 @@ public abstract class TaskManager {
                 while (running.get()) {
                     running.wait(timeout);
                     if (running.get() && System.currentTimeMillis() - start > 60000) {
-                        new RuntimeException("FAWE is taking a long time to execute a task (might just be a symptom): ")
-                                .printStackTrace();
+                        new RuntimeException("FAWE is taking a long time to execute a task (might just be a symptom): ").printStackTrace();
                         LOGGER.info("For full debug information use: /fawe threads");
                     }
                 }
@@ -300,8 +297,7 @@ public abstract class TaskManager {
     }
 
     /**
-     * @deprecated Deprecated without replacement as unused internally, and poor
-     *             implementation of what it's designed to do.
+     * @deprecated Deprecated without replacement as unused internally, and poor implementation of what it's designed to do.
      */
     @Deprecated(forRemoval = true, since = "2.7.0")
     public void notify(AtomicBoolean running) {
@@ -320,14 +316,12 @@ public abstract class TaskManager {
     }
 
     /**
-     * Run a task on the main thread when the TPS is high enough, and wait for
-     * execution to finish.
-     * - Useful if you need to access something from the Bukkit API from another
-     * thread<br>
+     * Run a task on the main thread when the TPS is high enough, and wait for execution to finish.
+     * - Useful if you need to access something from the Bukkit API from another thread<br>
      * - Usually wait time is around 25ms<br>
      */
     public <T> T syncWhenFree(@Nonnull final RunnableVal<T> function) {
-        if (Fawe.isMainThread() || Fawe.isFoliaServer()) {
+        if (Fawe.isMainThread()) {
             function.run();
             return function.value;
         }
@@ -339,14 +333,12 @@ public abstract class TaskManager {
     }
 
     /**
-     * Run a task on the main thread when the TPS is high enough, and wait for
-     * execution to finish.
-     * - Useful if you need to access something from the Bukkit API from another
-     * thread<br>
+     * Run a task on the main thread when the TPS is high enough, and wait for execution to finish.
+     * - Useful if you need to access something from the Bukkit API from another thread<br>
      * - Usually wait time is around 25ms<br>
      */
     public <T> T syncWhenFree(@Nonnull final Supplier<T> supplier) {
-        if (Fawe.isMainThread() || Fawe.isFoliaServer()) {
+        if (Fawe.isMainThread()) {
             return supplier.get();
         }
         try {
@@ -358,8 +350,7 @@ public abstract class TaskManager {
 
     /**
      * Quickly run a task on the main thread, and wait for execution to finish.
-     * - Useful if you need to access something from the Bukkit API from another
-     * thread<br>
+     * - Useful if you need to access something from the Bukkit API from another thread<br>
      * - Usually wait time is around 25ms
      */
     public <T> T sync(@Nonnull final RunnableVal<T> function) {
@@ -368,12 +359,11 @@ public abstract class TaskManager {
 
     /**
      * Quickly run a task on the main thread, and wait for execution to finish.
-     * - Useful if you need to access something from the Bukkit API from another
-     * thread<br>
+     * - Useful if you need to access something from the Bukkit API from another thread<br>
      * - Usually wait time is around 25ms<br>
      */
     public <T> T sync(final Supplier<T> function) {
-        if (Fawe.isMainThread() || Fawe.isFoliaServer()) {
+        if (Fawe.isMainThread()) {
             return function.get();
         }
         try {
