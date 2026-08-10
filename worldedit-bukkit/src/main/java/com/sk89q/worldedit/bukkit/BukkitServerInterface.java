@@ -20,6 +20,7 @@
 package com.sk89q.worldedit.bukkit;
 
 import com.fastasyncworldedit.bukkit.util.MinecraftVersion;
+import com.github.ssquadteam.fawe.scheduler.FaweScheduler;
 import com.fastasyncworldedit.core.configuration.Settings;
 import com.fastasyncworldedit.core.extent.processor.PlacementStateProcessor;
 import com.fastasyncworldedit.core.extent.processor.lighting.RelighterFactory;
@@ -135,6 +136,13 @@ public class BukkitServerInterface extends AbstractPlatform implements MultiUser
 
     @Override
     public int schedule(long delay, long period, Runnable task) {
+        //FAWE-Folia start - Bukkit's scheduler does not run on a regionised server
+        if (FaweScheduler.isFolia()) {
+            FaweScheduler.scheduler().runTimer(task, delay, period);
+            // Platform#schedule has no counterpart cancel; callers only test the id against -1.
+            return 0;
+        }
+        //FAWE-Folia end
         return Bukkit.getScheduler().scheduleSyncRepeatingTask(plugin, task, delay, period);
     }
 

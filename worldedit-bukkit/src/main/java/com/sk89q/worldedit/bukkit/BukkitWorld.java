@@ -27,7 +27,7 @@ import com.fastasyncworldedit.core.internal.exception.FaweException;
 import com.fastasyncworldedit.core.nbt.FaweCompoundTag;
 import com.fastasyncworldedit.core.queue.IChunkGet;
 import com.fastasyncworldedit.core.queue.implementation.packet.ChunkPacket;
-import com.fastasyncworldedit.core.util.TaskManager;
+import com.github.ssquadteam.fawe.scheduler.RegionSync;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.sk89q.worldedit.EditSession;
@@ -149,7 +149,10 @@ public class BukkitWorld extends AbstractWorld {
     public List<com.sk89q.worldedit.entity.Entity> getEntities(Region region) {
         World world = getWorld();
 
-        List<Entity> ents = TaskManager.taskManager().sync(world::getEntities);
+        //FAWE-Folia start - entity lists belong to the region owning the queried area
+        BlockVector3 min = region.getMinimumPoint();
+        List<Entity> ents = RegionSync.supply(world, min.x(), min.y(), min.z(), world::getEntities);
+        //FAWE-Folia end
         List<com.sk89q.worldedit.entity.Entity> entities = new ArrayList<>();
         for (Entity ent : ents) {
             if (region.contains(BukkitAdapter.asBlockVector(ent.getLocation()))) {
@@ -163,7 +166,10 @@ public class BukkitWorld extends AbstractWorld {
     public List<com.sk89q.worldedit.entity.Entity> getEntities() {
         List<com.sk89q.worldedit.entity.Entity> list = new ArrayList<>();
 
-        List<Entity> ents = TaskManager.taskManager().sync(getWorld()::getEntities);
+        //FAWE-Folia start - entity lists belong to a region, and the world spawn is as good an anchor as any
+        World world = getWorld();
+        List<Entity> ents = RegionSync.supply(world.getSpawnLocation(), world::getEntities);
+        //FAWE-Folia end
         for (Entity entity : ents) {
             list.add(BukkitAdapter.adapt(entity));
         }
@@ -173,9 +179,12 @@ public class BukkitWorld extends AbstractWorld {
     @Override
     public int removeEntities(final Region region) {
         List<com.sk89q.worldedit.entity.Entity> entities = getEntities(region);
-        return TaskManager.taskManager().sync(() -> entities.stream()
+        //FAWE-Folia start - removal belongs to the region owning the area the entities were found in
+        BlockVector3 min = region.getMinimumPoint();
+        return RegionSync.supply(getWorld(), min.x(), min.y(), min.z(), () -> entities.stream()
                 .mapToInt(entity -> entity.remove() ? 1 : 0).sum()
         );
+        //FAWE-Folia end
     }
 
     //FAWE: createEntity was moved to IChunkExtent to prevent issues with Async Entity Add.
@@ -297,7 +306,8 @@ public class BukkitWorld extends AbstractWorld {
             return false;
         }
 
-        TaskManager.taskManager().sync(() -> {
+        //FAWE-Folia start - container contents belong to the region owning that block
+        RegionSync.supply(getWorld(), pt.x(), pt.y(), pt.z(), () -> {
             InventoryHolder chest = (InventoryHolder) state;
             Inventory inven = chest.getInventory();
             if (chest instanceof Chest) {
@@ -306,6 +316,7 @@ public class BukkitWorld extends AbstractWorld {
             inven.clear();
             return null;
         });
+        //FAWE-Folia end
         return true;
     }
 

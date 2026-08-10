@@ -172,7 +172,7 @@ public class FaweBukkit implements IFawe, Listener {
      */
     @Override
     public TaskManager getTaskManager() {
-        return new BukkitTaskManager(plugin);
+        return new BukkitTaskManager();
     }
 
     public Plugin getPlugin() {

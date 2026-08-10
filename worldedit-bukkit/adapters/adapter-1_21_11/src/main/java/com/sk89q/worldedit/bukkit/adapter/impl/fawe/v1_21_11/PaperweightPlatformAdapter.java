@@ -9,6 +9,7 @@ import com.fastasyncworldedit.core.Fawe;
 import com.fastasyncworldedit.core.FaweCache;
 import com.fastasyncworldedit.core.math.BitArrayUnstretched;
 import com.fastasyncworldedit.core.math.IntPair;
+import com.github.ssquadteam.fawe.scheduler.RegionSync;
 import com.fastasyncworldedit.core.util.MathMan;
 import com.fastasyncworldedit.core.util.TaskManager;
 import com.mojang.serialization.DataResult;
@@ -326,9 +327,12 @@ public final class PaperweightPlatformAdapter extends NMSAdapter {
 
     private static void addTicket(ServerLevel serverLevel, int chunkX, int chunkZ) {
         // Ensure chunk is definitely loaded before applying a ticket
-        io.papermc.paper.util.MCUtil.MAIN_EXECUTOR.execute(() -> serverLevel
+        //FAWE-Folia start - ticket bookkeeping belongs to the region owning the chunk
+        RegionSync.dispatch(serverLevel.getWorld(), chunkX << 4, 0, chunkZ << 4,
+                io.papermc.paper.util.MCUtil.MAIN_EXECUTOR, () -> serverLevel
                 .getChunkSource()
                 .addTicketWithRadius(ChunkHolderManager.UNLOAD_COOLDOWN, new ChunkPos(chunkX, chunkZ), 0));
+        //FAWE-Folia end
     }
 
     public static ChunkHolder getPlayerChunk(ServerLevel nmsWorld, final int chunkX, final int chunkZ) {
@@ -361,7 +365,8 @@ public final class PaperweightPlatformAdapter extends NMSAdapter {
         if (lockHolder.chunkLock == null) {
             return;
         }
-        MinecraftServer.getServer().execute(() -> {
+        //FAWE-Folia start - chunk packets belong to the region owning the chunk
+        RegionSync.dispatch(nmsWorld.getWorld(), chunkX << 4, 0, chunkZ << 4, MinecraftServer.getServer(), () -> {
             try {
                 ChunkPos pos = levelChunk.getPos();
                 ClientboundLevelChunkWithLightPacket packet;
@@ -387,6 +392,7 @@ public final class PaperweightPlatformAdapter extends NMSAdapter {
                 NMSAdapter.endChunkPacketSend(nmsWorld.getWorld().getName(), pair, lockHolder);
             }
         });
+        //FAWE-Folia end
     }
 
     private static List<ServerPlayer> nearbyPlayers(ServerLevel serverLevel, ChunkPos coordIntPair) {

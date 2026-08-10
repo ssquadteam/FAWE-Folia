@@ -12,10 +12,12 @@ import com.fastasyncworldedit.core.queue.implementation.QueueHandler;
 import com.fastasyncworldedit.core.queue.implementation.blocks.CharGetBlocks;
 import com.fastasyncworldedit.core.util.MemUtil;
 import com.fastasyncworldedit.core.util.task.FaweThreadUtil;
+import com.github.ssquadteam.fawe.scheduler.FaweScheduler;
 import com.sk89q.worldedit.extent.Extent;
 import com.sk89q.worldedit.internal.util.LogManagerCompat;
 import com.sk89q.worldedit.util.formatting.text.TextComponent;
 import org.apache.logging.log4j.Logger;
+import org.bukkit.Location;
 
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -52,6 +54,15 @@ public abstract class AbstractBukkitGetBlocks<ServerLevel, LevelChunk> extends C
         this.maxHeight = maxY; // Minecraft max limit is exclusive
         this.chunkPos = new IntPair(chunkX, chunkZ);
     }
+
+    //FAWE-Folia start - the chunk's own region owns any server-thread work for this chunk
+    /**
+     * Get the Bukkit world this chunk belongs to, so chunk-owned work can be scheduled against its region.
+     *
+     * @return the Bukkit world backing {@link #serverLevel}
+     */
+    protected abstract org.bukkit.World getBukkitWorld();
+    //FAWE-Folia end
 
     protected abstract void send();
 
@@ -170,6 +181,21 @@ public abstract class AbstractBukkitGetBlocks<ServerLevel, LevelChunk> extends C
                     throw e;
                 }
             };
+            //FAWE-Folia start - a regionised server has no global main thread; run the chain where the chunk lives
+            if (FaweScheduler.isFolia()) {
+                Location anchor = new Location(getBukkitWorld(), chunkX << 4, 0, chunkZ << 4);
+                CompletableFuture<Future<?>> regionResult = new CompletableFuture<>();
+                FaweScheduler.scheduler().runAtLocation(anchor, () -> {
+                    try {
+                        regionResult.complete(chain.call());
+                    } catch (Throwable e) {
+                        regionResult.completeExceptionally(e);
+                    }
+                });
+                //noinspection unchecked - required at compile time
+                return (T) (Future) regionResult;
+            }
+            //FAWE-Folia end
             //noinspection unchecked - required at compile time
             return (T) (Future) queueHandler.sync(chain);
         } else {

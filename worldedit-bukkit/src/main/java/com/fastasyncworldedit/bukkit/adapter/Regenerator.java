@@ -4,6 +4,8 @@ import com.fastasyncworldedit.core.queue.IChunk;
 import com.fastasyncworldedit.core.queue.IChunkCache;
 import com.fastasyncworldedit.core.queue.IChunkGet;
 import com.fastasyncworldedit.core.queue.implementation.SingleThreadQueueExtent;
+import com.github.ssquadteam.fawe.scheduler.FaweScheduler;
+import com.github.ssquadteam.fawe.scheduler.SchedulerTask;
 import com.fastasyncworldedit.core.util.TaskManager;
 import com.sk89q.worldedit.WorldEditException;
 import com.sk89q.worldedit.bukkit.BukkitAdapter;
@@ -15,6 +17,7 @@ import com.sk89q.worldedit.regions.Region;
 import com.sk89q.worldedit.world.RegenOptions;
 import com.sk89q.worldedit.world.biome.BiomeType;
 import com.sk89q.worldedit.world.block.BaseBlock;
+import org.bukkit.Location;
 import org.bukkit.generator.BiomeProvider;
 import org.bukkit.generator.WorldInfo;
 import org.jetbrains.annotations.NotNull;
@@ -104,10 +107,21 @@ public abstract class Regenerator {
     private void copyToWorld() {
         createSource();
         final long timeoutPerTick = TimeUnit.MILLISECONDS.toNanos(10);
-        int taskId = TaskManager.taskManager().repeat(() -> {
+        Runnable drainTasks = () -> {
             final long startTime = System.nanoTime();
             runTasks(() -> System.nanoTime() - startTime < timeoutPerTick);
-        }, 1);
+        };
+        //FAWE-Folia start - drive the drain from the region owning the area being regenerated
+        SchedulerTask regionTask = null;
+        int taskId = -1;
+        if (FaweScheduler.isFolia()) {
+            BlockVector3 min = region.getMinimumPoint();
+            Location anchor = new Location(originalBukkitWorld, min.x(), min.y(), min.z());
+            regionTask = FaweScheduler.scheduler().runAtLocationTimer(anchor, drainTasks, 1, 1);
+        } else {
+            taskId = TaskManager.taskManager().repeat(drainTasks, 1);
+        }
+        //FAWE-Folia end
         //Setting Blocks
         boolean genbiomes = options.shouldRegenBiomes();
         boolean hasBiome = options.hasBiomeType();
@@ -126,7 +140,13 @@ public abstract class Regenerator {
             });
         }
         target.setBlocks(region, pattern);
-        TaskManager.taskManager().cancel(taskId);
+        //FAWE-Folia start
+        if (regionTask != null) {
+            regionTask.cancel();
+        } else {
+            TaskManager.taskManager().cancel(taskId);
+        }
+        //FAWE-Folia end
     }
 
     private abstract class ChunkwisePattern implements Pattern {

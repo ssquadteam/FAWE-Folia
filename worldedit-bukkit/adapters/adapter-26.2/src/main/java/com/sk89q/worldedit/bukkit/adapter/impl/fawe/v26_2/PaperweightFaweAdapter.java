@@ -10,7 +10,7 @@ import com.fastasyncworldedit.core.nbt.FaweCompoundTag;
 import com.fastasyncworldedit.core.queue.IBatchProcessor;
 import com.fastasyncworldedit.core.queue.IChunkGet;
 import com.fastasyncworldedit.core.queue.implementation.packet.ChunkPacket;
-import com.fastasyncworldedit.core.util.TaskManager;
+import com.github.ssquadteam.fawe.scheduler.RegionSync;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -572,7 +572,8 @@ public final class PaperweightFaweAdapter extends FaweAdapter<net.minecraft.nbt.
                 .getValue(Identifier.tryParse(feature.id()));
 
         FaweBlockStateListPopulator populator = new FaweBlockStateListPopulator(serverLevel);
-        List<CraftBlockState> placed = TaskManager.taskManager().sync(() -> {
+        //FAWE-Folia start - world generation belongs to the region owning the target block
+        List<CraftBlockState> placed = RegionSync.supply(world, pt.x(), pt.y(), pt.z(), () -> {
             preCaptureStates(serverLevel);
             try {
                 if (!configuredFeature.place(
@@ -609,7 +610,8 @@ public final class PaperweightFaweAdapter extends FaweAdapter<net.minecraft.nbt.
         TransformerLevelAccessor access = new TransformerLevelAccessor();
         FaweBlockStateListPopulator populator = new FaweBlockStateListPopulator(serverLevel);
         access.setDelegate(populator);
-        List<CraftBlockState> placed = TaskManager.taskManager().sync(() -> {
+        //FAWE-Folia start - world generation belongs to the region owning the target block
+        List<CraftBlockState> placed = RegionSync.supply(world, pt.x(), pt.y(), pt.z(), () -> {
             preCaptureStates(serverLevel);
             try {
                 StructureStart structureStart = structure.generate(
@@ -679,7 +681,8 @@ public final class PaperweightFaweAdapter extends FaweAdapter<net.minecraft.nbt.
                 .getValue(Identifier.tryParse(treeType.id()));
 
         FaweBlockStateListPopulator populator = new FaweBlockStateListPopulator(serverLevel);
-        List<CraftBlockState> placed = TaskManager.taskManager().sync(() -> {
+        //FAWE-Folia start - world generation belongs to the region owning the target block
+        List<CraftBlockState> placed = RegionSync.supply(world, pt.x(), pt.y(), pt.z(), () -> {
             preCaptureStates(serverLevel);
             try {
                 if (!placedFeature.place(

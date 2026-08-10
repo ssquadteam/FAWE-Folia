@@ -22,6 +22,7 @@ package com.sk89q.worldedit.bukkit;
 import com.fastasyncworldedit.core.configuration.Caption;
 import com.fastasyncworldedit.core.configuration.Settings;
 import com.fastasyncworldedit.core.util.TaskManager;
+import com.github.ssquadteam.fawe.scheduler.FaweScheduler;
 import com.sk89q.util.StringUtil;
 import com.sk89q.wepif.VaultResolver;
 import com.sk89q.worldedit.WorldEdit;
@@ -242,14 +243,14 @@ public class BukkitPlayer extends AbstractPlayerActor {
         }
         org.bukkit.World finalWorld = world;
         //FAWE end
-        return TaskManager.taskManager().sync(() -> player.teleport(new Location(
-                finalWorld,
-                pos.x(),
-                pos.y(),
-                pos.z(),
-                yaw,
-                pitch
-        )));
+        //FAWE-Folia start - a regionised server can only move a player across regions asynchronously
+        Location destination = new Location(finalWorld, pos.x(), pos.y(), pos.z(), yaw, pitch);
+        if (FaweScheduler.isFolia()) {
+            player.teleportAsync(destination);
+            return true;
+        }
+        //FAWE-Folia end
+        return TaskManager.taskManager().sync(() -> player.teleport(destination));
     }
 
     @Override
@@ -363,6 +364,12 @@ public class BukkitPlayer extends AbstractPlayerActor {
 
     @Override
     public boolean setLocation(com.sk89q.worldedit.util.Location location) {
+        //FAWE-Folia start - a regionised server can only move a player across regions asynchronously
+        if (FaweScheduler.isFolia()) {
+            player.teleportAsync(BukkitAdapter.adapt(location));
+            return true;
+        }
+        //FAWE-Folia end
         return player.teleport(BukkitAdapter.adapt(location));
     }
 

@@ -1,6 +1,6 @@
 package com.fastasyncworldedit.bukkit.adapter;
 
-import com.fastasyncworldedit.core.util.TaskManager;
+import com.github.ssquadteam.fawe.scheduler.RegionSync;
 import com.sk89q.worldedit.EditSession;
 import com.sk89q.worldedit.bukkit.BukkitAdapter;
 import com.sk89q.worldedit.bukkit.BukkitWorld;
@@ -53,7 +53,8 @@ public abstract class FaweAdapter<TAG, SERVER_LEVEL> extends CachedBukkitAdapter
         }
         BlockVector3 target = blockVector3;
         SERVER_LEVEL serverLevel = getServerLevel(world);
-        List<BlockState> placed = TaskManager.taskManager().sync(() -> {
+        //FAWE-Folia start - tree generation belongs to the region owning the target block
+        List<BlockState> placed = RegionSync.supply(world, target.x(), target.y(), target.z(), () -> {
             preCaptureStates(serverLevel);
             try {
                 if (!world.generateTree(BukkitAdapter.adapt(world, target), bukkitType)) {
@@ -64,6 +65,7 @@ public abstract class FaweAdapter<TAG, SERVER_LEVEL> extends CachedBukkitAdapter
                 postCaptureBlockStates(serverLevel);
             }
         });
+        //FAWE-Folia end
 
         if (placed == null || placed.isEmpty()) {
             return false;

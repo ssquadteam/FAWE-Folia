@@ -20,6 +20,7 @@
 package com.sk89q.worldedit.bukkit;
 
 import com.fastasyncworldedit.core.util.TaskManager;
+import com.github.ssquadteam.fawe.scheduler.FaweScheduler;
 import com.sk89q.worldedit.WorldEdit;
 import com.sk89q.worldedit.extension.platform.AbstractCommandBlockActor;
 import com.sk89q.worldedit.session.SessionKey;
@@ -191,6 +192,13 @@ public class BukkitBlockCommandSender extends AbstractCommandBlockActor {
 
             @Override
             public boolean isActive() {
+                //FAWE-Folia start - the command block's own region owns its block state
+                if (FaweScheduler.isFolia()) {
+                    // Matches the eventual-update semantics of the Bukkit branch below: refresh for the next caller.
+                    FaweScheduler.scheduler().runAtLocation(sender.getBlock().getLocation(), this::updateActive);
+                    return active;
+                }
+                //FAWE-Folia end
                 if (Bukkit.isPrimaryThread()) {
                     // we can update eagerly
                     updateActive();

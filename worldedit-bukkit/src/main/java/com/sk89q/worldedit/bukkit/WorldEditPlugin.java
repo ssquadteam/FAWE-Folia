@@ -22,6 +22,7 @@ package com.sk89q.worldedit.bukkit;
 import com.fastasyncworldedit.bukkit.BukkitPermissionAttachmentManager;
 import com.fastasyncworldedit.bukkit.FaweBukkit;
 import com.fastasyncworldedit.core.Fawe;
+import com.github.ssquadteam.fawe.scheduler.FaweScheduler;
 import com.fastasyncworldedit.core.util.UpdateNotification;
 import com.fastasyncworldedit.core.util.WEManager;
 import com.google.common.base.Joiner;
@@ -235,6 +236,10 @@ public class WorldEditPlugin extends JavaPlugin {
      */
     @Override
     public void onEnable() {
+
+        //FAWE-Folia start - the platform scheduler backs FaweBukkit's task manager, so it has to exist first
+        FaweScheduler.init(this);
+        //FAWE-Folia end
 
         // Catch bad things being done by naughty plugins that include
         // WorldEdit's classes
@@ -466,7 +471,9 @@ public class WorldEditPlugin extends JavaPlugin {
         if (config != null) {
             config.unload();
         }
-        this.getServer().getScheduler().cancelTasks(this);
+        //FAWE-Folia start - cancel through the platform scheduler, which also covers Folia's regionised schedulers
+        FaweScheduler.shutdown();
+        //FAWE-Folia end
     }
 
     /**

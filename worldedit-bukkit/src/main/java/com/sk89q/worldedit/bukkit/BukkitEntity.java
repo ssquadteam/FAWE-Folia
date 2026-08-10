@@ -20,6 +20,8 @@
 package com.sk89q.worldedit.bukkit;
 
 import com.fastasyncworldedit.core.util.TaskManager;
+import com.github.ssquadteam.fawe.scheduler.FaweScheduler;
+import com.github.ssquadteam.fawe.scheduler.RegionSync;
 import com.sk89q.worldedit.bukkit.adapter.BukkitImplAdapter;
 import com.sk89q.worldedit.entity.BaseEntity;
 import com.sk89q.worldedit.entity.Entity;
@@ -84,6 +86,12 @@ public class BukkitEntity implements Entity {
     public boolean setLocation(Location location) {
         org.bukkit.entity.Entity entity = entityRef.get();
         if (entity != null) {
+            //FAWE-Folia start - a regionised server can only move an entity across regions asynchronously
+            if (FaweScheduler.isFolia()) {
+                entity.teleportAsync(BukkitAdapter.adapt(location));
+                return true;
+            }
+            //FAWE-Folia end
             return entity.teleport(BukkitAdapter.adapt(location));
         } else {
             return false;
@@ -100,7 +108,9 @@ public class BukkitEntity implements Entity {
 
             BukkitImplAdapter adapter = WorldEditPlugin.getInstance().getBukkitImplAdapter();
             if (adapter != null) {
-                return adapter.getEntity(entity);
+                //FAWE-Folia start - reading entity data belongs to the entity's owner
+                return RegionSync.supplyAtEntity(entity, () -> adapter.getEntity(entity));
+                //FAWE-Folia end
             } else {
                 return null;
             }
@@ -111,6 +121,22 @@ public class BukkitEntity implements Entity {
 
     @Override
     public boolean remove() {
+        //FAWE-Folia start - removal belongs to the entity's owner, which follows it across regions
+        if (FaweScheduler.isFolia()) {
+            org.bukkit.entity.Entity entity = entityRef.get();
+            if (entity == null) {
+                return true;
+            }
+            return RegionSync.supplyAtEntity(entity, () -> {
+                try {
+                    entity.remove();
+                } catch (UnsupportedOperationException e) {
+                    return false;
+                }
+                return entity.isDead();
+            });
+        }
+        //FAWE-Folia end
         // synchronize the whole method, not just the remove operation as we always need to synchronize and
         // can make sure the entity reference was not invalidated in the few milliseconds between the next available tick (lol)
         return TaskManager.taskManager().sync(() -> {

@@ -82,6 +82,10 @@ public class Fawe {
 
     private static Fawe instance;
 
+    //FAWE-Folia start - regionised server flag
+    private static boolean foliaServer;
+    //FAWE-Folia end
+
     /**
      * The ticks-per-second timer.
      */
@@ -210,6 +214,29 @@ public class Fawe {
     public static boolean isMainThread() {
         return instance == null || instance.thread == Thread.currentThread();
     }
+
+    //FAWE-Folia start - regionised server flag
+    /**
+     * Get whether the server regionises ticking, and therefore has no single main thread.
+     *
+     * <p>Set by the platform implementation at startup. Core code branches on this where a "hop to the main thread" step is
+     * meaningless or deadlock-prone on a regionised server.</p>
+     *
+     * @return true if the server is regionised (Folia)
+     */
+    public static boolean isFoliaServer() {
+        return foliaServer;
+    }
+
+    /**
+     * Set whether the server regionises ticking. Platform implementations only, once, at startup.
+     *
+     * @param foliaServer true if the server is regionised (Folia)
+     */
+    public static void setFoliaServer(boolean foliaServer) {
+        Fawe.foliaServer = foliaServer;
+    }
+    //FAWE-Folia end
 
     /**
      * Non-api. Handles an input FAWE exception if not already handled, given the input boolean array.

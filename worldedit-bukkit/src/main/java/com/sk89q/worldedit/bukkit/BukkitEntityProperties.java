@@ -19,6 +19,7 @@
 
 package com.sk89q.worldedit.bukkit;
 
+import com.github.ssquadteam.fawe.scheduler.RegionSync;
 import com.sk89q.worldedit.entity.metadata.EntityProperties;
 import org.bukkit.entity.AbstractVillager;
 import org.bukkit.entity.Ambient;
@@ -148,12 +149,16 @@ class BukkitEntityProperties implements EntityProperties {
 
     @Override
     public boolean isTamed() {
-        return entity instanceof Tameable && ((Tameable) entity).isTamed();
+        //FAWE-Folia start - reading entity data belongs to the entity's owner
+        return RegionSync.supplyAtEntity(entity, () -> entity instanceof Tameable && ((Tameable) entity).isTamed());
+        //FAWE-Folia end
     }
 
     @Override
     public boolean isTagged() {
-        return entity instanceof LivingEntity && entity.getCustomName() != null;
+        //FAWE-Folia start - reading entity data belongs to the entity's owner
+        return RegionSync.supplyAtEntity(entity, () -> entity instanceof LivingEntity && entity.getCustomName() != null);
+        //FAWE-Folia end
     }
 
     @Override

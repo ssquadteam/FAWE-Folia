@@ -321,7 +321,9 @@ public abstract class TaskManager {
      * - Usually wait time is around 25ms<br>
      */
     public <T> T syncWhenFree(@Nonnull final RunnableVal<T> function) {
-        if (Fawe.isMainThread()) {
+        //FAWE-Folia start - do not hand off on a regionised server
+        if (Fawe.isMainThread() || Fawe.isFoliaServer()) {
+            //FAWE-Folia end
             function.run();
             return function.value;
         }
@@ -338,7 +340,9 @@ public abstract class TaskManager {
      * - Usually wait time is around 25ms<br>
      */
     public <T> T syncWhenFree(@Nonnull final Supplier<T> supplier) {
-        if (Fawe.isMainThread()) {
+        //FAWE-Folia start - do not hand off on a regionised server
+        if (Fawe.isMainThread() || Fawe.isFoliaServer()) {
+            //FAWE-Folia end
             return supplier.get();
         }
         try {
@@ -361,9 +365,16 @@ public abstract class TaskManager {
      * Quickly run a task on the main thread, and wait for execution to finish.
      * - Useful if you need to access something from the Bukkit API from another thread<br>
      * - Usually wait time is around 25ms<br>
+     *
+     * <p>FAWE-Folia: a regionised server has no single main thread to hand off to, and the tick loop draining the sync queue
+     * runs on the global region thread - so a caller already on that thread would block waiting for itself. On such a server
+     * the task is run on the calling thread instead. Call sites that genuinely need a specific owner schedule against that
+     * owner directly rather than going through here.</p>
      */
     public <T> T sync(final Supplier<T> function) {
-        if (Fawe.isMainThread()) {
+        //FAWE-Folia start - do not hand off on a regionised server
+        if (Fawe.isMainThread() || Fawe.isFoliaServer()) {
+            //FAWE-Folia end
             return function.get();
         }
         try {

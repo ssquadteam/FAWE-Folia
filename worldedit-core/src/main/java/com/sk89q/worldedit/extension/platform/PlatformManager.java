@@ -19,6 +19,7 @@
 
 package com.sk89q.worldedit.extension.platform;
 
+import com.fastasyncworldedit.core.Fawe;
 import com.fastasyncworldedit.core.configuration.Caption;
 import com.fastasyncworldedit.core.function.pattern.PatternTraverser;
 import com.fastasyncworldedit.core.internal.exception.FaweException;
@@ -438,7 +439,7 @@ public class PlatformManager {
                         player.runAction(() -> reset(superPickaxe)
                                 .actPrimary(queryCapability(Capability.WORLD_EDITING),
                                         getConfiguration(), player, session, location, event.getFace()
-                                ), false, true);
+                                ), false, !Fawe.isFoliaServer()); //FAWE-Folia - keep tool actions on the event's region thread
                         //FAWE end
                         event.setCancelled(true);
                         return;
@@ -451,7 +452,7 @@ public class PlatformManager {
                     player.runAction(() -> reset((DoubleActionBlockTool) tool)
                             .actSecondary(queryCapability(Capability.WORLD_EDITING),
                                     getConfiguration(), player, session, location, event.getFace()
-                            ), false, true);
+                            ), false, !Fawe.isFoliaServer()); //FAWE-Folia - keep tool actions on the event's region thread
                     //FAWE end
                     event.setCancelled(true);
                 }
@@ -470,7 +471,7 @@ public class PlatformManager {
                             blockTool.actPrimary(queryCapability(Capability.WORLD_EDITING),
                                     getConfiguration(), player, session, location, event.getFace()
                             );
-                        }, false, true);
+                        }, false, !Fawe.isFoliaServer()); //FAWE-Folia - keep tool actions on the event's region thread
                         //FAWE end
                         event.setCancelled(true);
                     }
@@ -509,10 +510,17 @@ public class PlatformManager {
                     Tool tool = session.getTool(player);
                     if (tool instanceof DoubleActionTraceTool && tool.canUse(player)) {
                         //FAWE start - run async
-                        player.runAsyncIfFree(() -> reset((DoubleActionTraceTool) tool)
+                        //FAWE-Folia start - keep tool actions on the event's region thread
+                        Runnable action = () -> reset((DoubleActionTraceTool) tool)
                                 .actSecondary(queryCapability(Capability.WORLD_EDITING),
                                         getConfiguration(), player, session
-                                ));
+                                );
+                        if (Fawe.isFoliaServer()) {
+                            player.runIfFree(action);
+                        } else {
+                            player.runAsyncIfFree(action);
+                        }
+                        //FAWE-Folia end
                         //FAWE end
                         event.setCancelled(true);
                         return;
@@ -528,7 +536,7 @@ public class PlatformManager {
                         //todo this needs to be fixed so the event is canceled after actPrimary is used and returns true
                         player.runAction(() -> reset((TraceTool) tool).actPrimary(queryCapability(Capability.WORLD_EDITING),
                                 getConfiguration(), player, session
-                        ), false, true);
+                        ), false, !Fawe.isFoliaServer()); //FAWE-Folia - keep tool actions on the event's region thread
                         //FAWE end
                         event.setCancelled(true);
                         return;

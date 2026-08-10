@@ -106,9 +106,11 @@ public abstract class QueueHandler implements Trimable, Runnable {
 
     @Override
     public void run() {
-        if (!Fawe.isMainThread()) {
+        //FAWE-Folia start - a regionised server has no single main thread to assert against
+        if (!Fawe.isMainThread() && !Fawe.isFoliaServer()) {
             throw new IllegalStateException("Not main thread");
         }
+        //FAWE-Folia end
         if (!syncTasks.isEmpty()) {
             long currentAllocate = getAllocate();
 
@@ -328,7 +330,7 @@ public abstract class QueueHandler implements Trimable, Runnable {
     }
 
     private <T> Future<T> sync(Runnable run, T value, Queue<FutureTask> queue) {
-        if (Fawe.isMainThread()) {
+        if (canRunInline()) {
             run.run();
             return Futures.immediateFuture(value);
         }
@@ -339,7 +341,7 @@ public abstract class QueueHandler implements Trimable, Runnable {
     }
 
     private <T> Future<T> sync(Runnable run, Queue<FutureTask> queue) {
-        if (Fawe.isMainThread()) {
+        if (canRunInline()) {
             run.run();
             return Futures.immediateCancelledFuture();
         }
@@ -350,7 +352,7 @@ public abstract class QueueHandler implements Trimable, Runnable {
     }
 
     private <T> Future<T> sync(Callable<T> call, Queue<FutureTask> queue) throws Exception {
-        if (Fawe.isMainThread()) {
+        if (canRunInline()) {
             return Futures.immediateFuture(call.call());
         }
         final FutureTask<T> result = new FutureTask<>(call);
@@ -360,7 +362,7 @@ public abstract class QueueHandler implements Trimable, Runnable {
     }
 
     private <T> Future<T> sync(Supplier<T> call, Queue<FutureTask> queue) {
-        if (Fawe.isMainThread()) {
+        if (canRunInline()) {
             return Futures.immediateFuture(call.get());
         }
         final FutureTask<T> result = new FutureTask<>(call::get);
@@ -368,6 +370,20 @@ public abstract class QueueHandler implements Trimable, Runnable {
         notifySync(queue);
         return result;
     }
+
+    //FAWE-Folia start - a regionised server has no single main thread to run inline on
+    /**
+     * Get whether a task submitted to one of the sync queues may instead be run inline on the calling thread.
+     *
+     * <p>On a regionised server the thread FAWE captured at startup owns no particular region, so running inline there
+     * would touch server state from the wrong owner. Tasks are queued for the tick loop instead.</p>
+     *
+     * @return true if the calling thread may run a sync task inline
+     */
+    private static boolean canRunInline() {
+        return Fawe.isMainThread() && !Fawe.isFoliaServer();
+    }
+    //FAWE-Folia end
 
     private void notifySync(Object object) {
         synchronized (object) {

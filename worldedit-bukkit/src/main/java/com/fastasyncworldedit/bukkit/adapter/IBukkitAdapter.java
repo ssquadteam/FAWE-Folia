@@ -1,7 +1,7 @@
 package com.fastasyncworldedit.bukkit.adapter;
 
 import com.fastasyncworldedit.bukkit.util.BukkitItemStack;
-import com.fastasyncworldedit.core.util.TaskManager;
+import com.github.ssquadteam.fawe.scheduler.RegionSync;
 import com.sk89q.worldedit.EditSession;
 import com.sk89q.worldedit.NotABlockException;
 import com.sk89q.worldedit.blocks.BaseItemStack;
@@ -388,7 +388,9 @@ public interface IBukkitAdapter {
      * @return list of {@link org.bukkit.entity.Entity}
      */
     default List<org.bukkit.entity.Entity> getEntities(org.bukkit.World world) {
-        return TaskManager.taskManager().sync(world::getEntities);
+        //FAWE-Folia start - entity lists belong to a region, and the world spawn is as good an anchor as any
+        return RegionSync.supply(world.getSpawnLocation(), world::getEntities);
+        //FAWE-Folia end
     }
 
     /**

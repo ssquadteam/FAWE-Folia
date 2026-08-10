@@ -9,6 +9,7 @@ import com.fastasyncworldedit.core.extent.processor.heightmap.HeightMapType;
 import com.fastasyncworldedit.core.internal.exception.FaweException;
 import com.fastasyncworldedit.core.math.BitArrayUnstretched;
 import com.fastasyncworldedit.core.math.IntPair;
+import com.github.ssquadteam.fawe.scheduler.RegionSync;
 import com.fastasyncworldedit.core.nbt.FaweCompoundTag;
 import com.fastasyncworldedit.core.queue.IChunkSet;
 import com.fastasyncworldedit.core.util.MathMan;
@@ -363,7 +364,15 @@ public class PaperweightGetBlocks extends AbstractBukkitGetBlocks<ServerLevel, L
                             beacons = new ArrayList<>();
                         }
                         beacons.add(tile);
-                        PaperweightPlatformAdapter.removeBeacon(tile, nmsChunk);
+                        //FAWE-Folia start - the beacon's own region owns its block entity
+                        RegionSync.dispatch(
+                                nmsWorld.getWorld(),
+                                tile.getBlockPos().getX(),
+                                tile.getBlockPos().getY(),
+                                tile.getBlockPos().getZ(),
+                                () -> PaperweightPlatformAdapter.removeBeacon(tile, nmsChunk)
+                        );
+                        //FAWE-Folia end
                         continue;
                     }
                     nmsChunk.removeBlockEntity(tile.getBlockPos());
@@ -792,6 +801,13 @@ public class PaperweightGetBlocks extends AbstractBukkitGetBlocks<ServerLevel, L
         }
         this.blocks[layer] = arr;
     }
+
+    //FAWE-Folia start - the chunk's own region owns any server-thread work for this chunk
+    @Override
+    protected org.bukkit.World getBukkitWorld() {
+        return serverLevel.getWorld();
+    }
+    //FAWE-Folia end
 
     @Override
     public void send() {
