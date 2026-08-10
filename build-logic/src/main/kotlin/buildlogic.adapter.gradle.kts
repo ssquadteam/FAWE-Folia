@@ -39,12 +39,18 @@ repositories {
         }
     }*/
     mavenCentral()
-    // FAWE-Folia: paperweight resolves yarn param mappings for the older adapters here. EngineHub's
-    // mirrors 404 for them, so without this a build with a cold cache cannot resolve adapter-1_21.
-    maven {
-        name = "FabricMC"
-        url = uri("https://maven.fabricmc.net/")
-        content {
+    // FAWE-Folia: paperweight adds its own FabricMC repository for the newer dev bundles, but not for
+    // adapter-1_21's pinned one, so its yarn param mappings resolve against EngineHub's mirror alone -
+    // which 404s for them. A plain repository declaration is not enough, as net.fabricmc is bound
+    // exclusively to paperweight's repository; claim the group exclusively so it always has a home.
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = "FabricMC"
+                url = uri("https://maven.fabricmc.net/")
+            }
+        }
+        filter {
             includeGroup("net.fabricmc")
         }
     }
