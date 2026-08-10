@@ -1,5 +1,4 @@
 import buildlogic.getVersion
-import org.gradle.api.artifacts.repositories.MavenArtifactRepository
 import buildlogic.stringyLibs
 
 plugins {
@@ -56,12 +55,6 @@ repositories {
     }
     afterEvaluate {
         killNonEngineHubRepositories()
-        // FAWE-Folia: temporary diagnostic, remove once adapter param mappings resolve.
-        logger.lifecycle(
-            "FAWE-Folia repo diagnostic for {}: {}",
-            project.path,
-            repositories.filterIsInstance<MavenArtifactRepository>().joinToString { it.name + "=" + it.url }
-        )
     }
 }
 
