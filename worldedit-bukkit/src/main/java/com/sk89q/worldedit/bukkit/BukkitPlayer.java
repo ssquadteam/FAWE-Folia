@@ -23,6 +23,7 @@ import com.fastasyncworldedit.core.configuration.Caption;
 import com.fastasyncworldedit.core.configuration.Settings;
 import com.fastasyncworldedit.core.util.TaskManager;
 import com.github.ssquadteam.fawe.scheduler.FaweScheduler;
+import com.github.ssquadteam.fawe.scheduler.RegionSync;
 import com.sk89q.util.StringUtil;
 import com.sk89q.wepif.VaultResolver;
 import com.sk89q.worldedit.WorldEdit;
@@ -164,7 +165,8 @@ public class BukkitPlayer extends AbstractPlayerActor {
     public void giveItem(BaseItemStack itemStack) {
         final PlayerInventory inv = player.getInventory();
         ItemStack newItem = BukkitAdapter.adapt(itemStack);
-        TaskManager.taskManager().sync(() -> {
+        //FAWE-Folia start - a player's inventory belongs to the player, and TaskManager#sync runs inline there
+        RegionSync.supplyAtEntity(player, () -> {
             if (itemStack.getType().id().equalsIgnoreCase(WorldEdit.getInstance().getConfiguration().wandItem)) {
                 inv.remove(newItem);
             }
@@ -187,6 +189,7 @@ public class BukkitPlayer extends AbstractPlayerActor {
             player.updateInventory();
             return null;
         });
+        //FAWE-Folia end
     }
     //FAWE end
 

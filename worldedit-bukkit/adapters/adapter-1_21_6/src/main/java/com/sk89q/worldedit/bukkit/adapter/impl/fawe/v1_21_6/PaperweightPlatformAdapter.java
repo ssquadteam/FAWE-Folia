@@ -11,7 +11,6 @@ import com.fastasyncworldedit.core.math.BitArrayUnstretched;
 import com.fastasyncworldedit.core.math.IntPair;
 import com.github.ssquadteam.fawe.scheduler.RegionSync;
 import com.fastasyncworldedit.core.util.MathMan;
-import com.fastasyncworldedit.core.util.TaskManager;
 import com.sk89q.worldedit.bukkit.WorldEditPlugin;
 import com.sk89q.worldedit.bukkit.adapter.BukkitImplAdapter;
 import com.sk89q.worldedit.bukkit.adapter.Refraction;
@@ -294,7 +293,15 @@ public final class PaperweightPlatformAdapter extends NMSAdapter {
                 );
             }
         }
-        return CompletableFuture.supplyAsync(() -> TaskManager.taskManager().sync(() -> serverLevel.getChunk(chunkX, chunkZ)));
+        //FAWE-Folia start - loading a chunk belongs to the region that owns it
+        return CompletableFuture.supplyAsync(() -> RegionSync.supply(
+                serverLevel.getWorld(),
+                chunkX << 4,
+                0,
+                chunkZ << 4,
+                () -> serverLevel.getChunk(chunkX, chunkZ)
+        ));
+        //FAWE-Folia end
     }
 
     private static LevelChunk toLevelChunk(Chunk chunk) {
