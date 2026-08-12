@@ -267,11 +267,7 @@ public class PaperweightFaweWorldNativeAccess implements WorldNativeAccess<Level
                     cc.blockPos.getX(),
                     cc.blockPos.getY(),
                     cc.blockPos.getZ(),
-                    () -> cc.levelChunk.setBlockState(
-                            cc.blockPos,
-                            cc.blockState,
-                            sideEffectSet.shouldApply(SideEffect.UPDATE) ? 0 : 512
-                    )
+                    () -> cc.levelChunk.setBlockState(cc.blockPos, cc.blockState, sideEffectSet != null && sideEffectSet.shouldApply(SideEffect.UPDATE))
             ));
             if (sendChunks) {
                 for (IntPair chunk : toSend) {
@@ -304,11 +300,7 @@ public class PaperweightFaweWorldNativeAccess implements WorldNativeAccess<Level
                     cc.blockPos.getX(),
                     cc.blockPos.getY(),
                     cc.blockPos.getZ(),
-                    () -> cc.levelChunk.setBlockState(
-                            cc.blockPos,
-                            cc.blockState,
-                            sideEffectSet.shouldApply(SideEffect.UPDATE) ? 0 : 512
-                    )
+                    () -> cc.levelChunk.setBlockState(cc.blockPos, cc.blockState, sideEffectSet != null && sideEffectSet.shouldApply(SideEffect.UPDATE))
             ));
             for (IntPair chunk : cachedChunksToSend) {
                 PaperweightPlatformAdapter.sendChunk(chunk, getLevel().getWorld().getHandle(), chunk.x(), chunk.z());
