@@ -3,6 +3,8 @@ package com.sk89q.worldedit.bukkit.adapter.impl.fawe.v1_21_5;
 import com.fastasyncworldedit.core.Fawe;
 import com.fastasyncworldedit.core.math.IntPair;
 import com.fastasyncworldedit.core.util.TaskManager;
+import com.github.ssquadteam.fawe.scheduler.FaweScheduler;
+import com.github.ssquadteam.fawe.scheduler.RegionSync;
 import com.fastasyncworldedit.core.util.task.RunnableVal;
 import com.sk89q.worldedit.bukkit.BukkitAdapter;
 import com.sk89q.worldedit.internal.block.BlockStateIdAccess;
@@ -258,6 +260,28 @@ public class PaperweightFaweWorldNativeAccess implements WorldNativeAccess<Level
                 }
             }
         };
+        //FAWE-Folia start - each block write belongs to the region owning its chunk, and TaskManager#sync
+        // runs inline on a regionised server, so the unpatched path would mutate the world off-region
+        if (FaweScheduler.isFolia()) {
+            changes.forEach(cc -> RegionSync.dispatch(
+                    getLevel().getWorld(),
+                    cc.blockPos.getX(),
+                    cc.blockPos.getY(),
+                    cc.blockPos.getZ(),
+                    () -> cc.levelChunk.setBlockState(
+                            cc.blockPos,
+                            cc.blockState,
+                            sideEffectSet.shouldApply(SideEffect.UPDATE) ? 0 : 512
+                    )
+            ));
+            if (sendChunks) {
+                for (IntPair chunk : toSend) {
+                    PaperweightPlatformAdapter.sendChunk(chunk, getLevel().getWorld().getHandle(), chunk.x(), chunk.z());
+                }
+            }
+            return;
+        }
+        //FAWE-Folia end
         TaskManager.taskManager().async(() -> TaskManager.taskManager().sync(runnableVal));
     }
 
@@ -274,11 +298,28 @@ public class PaperweightFaweWorldNativeAccess implements WorldNativeAccess<Level
                 }
             }
         };
-        if (Fawe.isMainThread()) {
+        //FAWE-Folia start - as above, route each write to the region that owns it
+        if (FaweScheduler.isFolia()) {
+            cachedChanges.forEach(cc -> RegionSync.dispatch(
+                    getLevel().getWorld(),
+                    cc.blockPos.getX(),
+                    cc.blockPos.getY(),
+                    cc.blockPos.getZ(),
+                    () -> cc.levelChunk.setBlockState(
+                            cc.blockPos,
+                            cc.blockState,
+                            sideEffectSet.shouldApply(SideEffect.UPDATE) ? 0 : 512
+                    )
+            ));
+            for (IntPair chunk : cachedChunksToSend) {
+                PaperweightPlatformAdapter.sendChunk(chunk, getLevel().getWorld().getHandle(), chunk.x(), chunk.z());
+            }
+        } else if (Fawe.isMainThread()) {
             runnableVal.run();
         } else {
             TaskManager.taskManager().sync(runnableVal);
         }
+        //FAWE-Folia end
         cachedChanges.clear();
         cachedChunksToSend.clear();
     }
