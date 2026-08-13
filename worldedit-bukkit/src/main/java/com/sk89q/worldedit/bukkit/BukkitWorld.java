@@ -27,6 +27,7 @@ import com.fastasyncworldedit.core.internal.exception.FaweException;
 import com.fastasyncworldedit.core.nbt.FaweCompoundTag;
 import com.fastasyncworldedit.core.queue.IChunkGet;
 import com.fastasyncworldedit.core.queue.implementation.packet.ChunkPacket;
+import com.github.ssquadteam.fawe.scheduler.FaweScheduler;
 import com.github.ssquadteam.fawe.scheduler.RegionSync;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
@@ -408,7 +409,12 @@ public class BukkitWorld extends AbstractWorld {
         //FAWE start
         int X = pt.x() >> 4;
         int Z = pt.z() >> 4;
-        if (Fawe.isMainThread()) {
+        //FAWE-Folia start - isMainThread means nothing on a regionised server, and a synchronous getChunkAt from
+        // the wrong region is exactly what it forbids; the asynchronous load is always correct there
+        if (FaweScheduler.isFolia()) {
+            PaperLib.getChunkAtAsync(world, X, Z, true);
+        } else if (Fawe.isMainThread()) {
+            //FAWE-Folia end
             world.getChunkAt(X, Z);
         } else if (PaperLib.isPaper()) {
             PaperLib.getChunkAtAsync(world, X, Z, true);
@@ -627,8 +633,13 @@ public class BukkitWorld extends AbstractWorld {
                 }
             }
         }
-        Block bukkitBlock = getWorld().getBlockAt(position.x(), position.y(), position.z());
-        bukkitBlock.setBlockData(BukkitAdapter.adapt(block), sideEffects.doesApplyAny());
+        //FAWE-Folia start - the generic fallback writes through the Bukkit API, which the owning region must do
+        RegionSync.supply(getWorld(), position.x(), position.y(), position.z(), () -> {
+            Block bukkitBlock = getWorld().getBlockAt(position.x(), position.y(), position.z());
+            bukkitBlock.setBlockData(BukkitAdapter.adapt(block), sideEffects.doesApplyAny());
+            return null;
+        });
+        //FAWE-Folia end
         return true;
     }
 

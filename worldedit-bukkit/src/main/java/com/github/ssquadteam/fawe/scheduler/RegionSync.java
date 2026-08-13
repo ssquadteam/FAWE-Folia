@@ -96,6 +96,24 @@ public final class RegionSync {
     }
 
     /**
+     * Hand a task to the thread owning the given entity, without waiting for it.
+     *
+     * <p>Off a regionised server this runs inline, exactly as the unpatched code did. On a regionised server it runs inline
+     * when the caller already owns the entity - which is the case inside that entity's own event handlers - and is handed to
+     * the owning thread otherwise.</p>
+     *
+     * @param entity the entity that owns the task
+     * @param task   the task to run
+     */
+    public static void dispatchAtEntity(Entity entity, Runnable task) {
+        if (!FaweScheduler.isFolia()) {
+            task.run();
+            return;
+        }
+        FaweScheduler.scheduler().runAtEntity(entity, task);
+    }
+
+    /**
      * Hand a task to the region owning the given block position, falling back to a platform executor.
      *
      * <p>Same as {@link #dispatch(World, int, int, int, Runnable)}, except that off a regionised server the task goes to

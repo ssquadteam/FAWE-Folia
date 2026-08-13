@@ -3,6 +3,7 @@ package com.fastasyncworldedit.bukkit.listener;
 import com.fastasyncworldedit.core.Fawe;
 import com.fastasyncworldedit.core.configuration.Settings;
 import com.fastasyncworldedit.core.util.TaskManager;
+import com.github.ssquadteam.fawe.scheduler.RegionSync;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
@@ -100,7 +101,10 @@ public class RenderListener implements Listener {
                 }
             }
         }
-        player.setViewDistance(value);
+        //FAWE-Folia start - a player's view distance belongs to the player, and the timer below walks every player
+        // from the global region thread rather than from each player's own
+        RegionSync.dispatchAtEntity(player, () -> player.setViewDistance(value));
+        //FAWE-Folia end
     }
 
     private int getViewDistance(Player player) {

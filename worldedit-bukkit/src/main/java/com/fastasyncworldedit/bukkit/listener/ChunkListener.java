@@ -6,6 +6,7 @@ import com.fastasyncworldedit.core.configuration.Settings;
 import com.fastasyncworldedit.core.util.FaweTimer;
 import com.fastasyncworldedit.core.util.MathMan;
 import com.fastasyncworldedit.core.util.TaskManager;
+import com.github.ssquadteam.fawe.scheduler.FaweScheduler;
 import com.sk89q.worldedit.internal.util.LogManagerCompat;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
@@ -59,6 +60,18 @@ public abstract class ChunkListener implements Listener {
             Settings.settings().TICK_LIMITER.FALLING, Settings.settings().TICK_LIMITER.ITEMS};
 
     public ChunkListener() {
+        //FAWE-Folia start - the tick limiter is not safe on a regionised server
+        // Its counters are plain hash maps mutated straight from BlockPhysicsEvent, EntityChangeBlockEvent and
+        // ItemSpawnEvent. On a regionised server those fire on many region threads at once, so the maps would be
+        // corrupted by concurrent writes. The class is deprecated and untouched since 1.12, so it is switched off
+        // rather than made thread-safe.
+        if (FaweScheduler.isFolia() && Settings.settings().TICK_LIMITER.ENABLED) {
+            LOGGER.warn("The FAWE tick limiter is disabled on regionised servers: its counters are not thread-safe "
+                    + "and every region thread would write to them at once. Set tick-limiter.enabled to false to "
+                    + "silence this warning.");
+            return;
+        }
+        //FAWE-Folia end
         if (Settings.settings().TICK_LIMITER.ENABLED) {
             PluginManager plm = Bukkit.getPluginManager();
             Plugin plugin = Fawe.<FaweBukkit>platform().getPlugin();
