@@ -19,6 +19,7 @@
 
 package com.sk89q.worldedit.bukkit;
 
+import com.fastasyncworldedit.bukkit.adapter.NMSRelighterFactory;
 import com.fastasyncworldedit.bukkit.util.MinecraftVersion;
 import com.github.ssquadteam.fawe.scheduler.FaweScheduler;
 import com.fastasyncworldedit.core.configuration.Settings;
@@ -297,6 +298,18 @@ public class BukkitServerInterface extends AbstractPlatform implements MultiUser
     public @Nonnull
     RelighterFactory getRelighterFactory() {
         if (this.relighterFactory == null) {
+            //FAWE-Folia start - the starlight relighter cannot be driven safely across regions
+            // It batches up to 32x32 chunks, which may span several regions, then loads them, tickets them and calls
+            // the server's light engine for the whole batch from the global region thread. Folia gives no way to split
+            // a batch by owning region, so FAWE's own relighter - which works through the same queue as block writes,
+            // and is therefore already routed to the right owner - is used instead.
+            if (FaweScheduler.isFolia()) {
+                this.relighterFactory = new NMSRelighterFactory();
+                LOGGER.info("Using {} as relighter factory: the starlight relighter is not usable on a regionised "
+                        + "server.", this.relighterFactory.getClass().getCanonicalName());
+                return this.relighterFactory;
+            }
+            //FAWE-Folia end
             this.relighterFactory = this.plugin.getBukkitImplAdapter().getRelighterFactory();
             LOGGER.info("Using {} as relighter factory.", this.relighterFactory.getClass().getCanonicalName());
         }
