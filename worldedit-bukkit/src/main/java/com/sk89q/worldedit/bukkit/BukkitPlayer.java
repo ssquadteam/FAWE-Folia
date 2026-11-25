@@ -450,6 +450,11 @@ public class BukkitPlayer extends AbstractPlayerActor {
         BaseBlock baseBlock;
         if (block != null) {
             baseBlock = block.toBaseBlock();
+        } else if (FaweScheduler.isFolia()) {
+            //FAWE-Folia start - upstream now restores the real block (state and block entity NBT) from the world; that
+            // read belongs to the region owning the position, and server-side CUI calls this from command threads
+            baseBlock = RegionSync.supply(loc.getWorld(), pos.x(), pos.y(), pos.z(), () -> getExtent().getFullBlock(pos));
+            //FAWE-Folia end
         } else {
             baseBlock = getExtent().getFullBlock(pos);
         }
