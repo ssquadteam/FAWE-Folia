@@ -19,6 +19,7 @@
 
 package com.sk89q.worldedit.bukkit;
 
+import com.fastasyncworldedit.bukkit.util.PaperSupport;
 import com.fastasyncworldedit.bukkit.util.WorldUnloadedException;
 import com.fastasyncworldedit.core.Fawe;
 import com.fastasyncworldedit.core.FaweCache;
@@ -60,7 +61,6 @@ import com.sk89q.worldedit.world.generation.ConfiguredFeatureType;
 import com.sk89q.worldedit.world.generation.StructureType;
 import com.sk89q.worldedit.world.weather.WeatherType;
 import com.sk89q.worldedit.world.weather.WeatherTypes;
-import io.papermc.lib.PaperLib;
 import org.apache.logging.log4j.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.Effect;
@@ -302,14 +302,18 @@ public class BukkitWorld extends AbstractWorld {
         }
 
         Block block = getWorld().getBlockAt(pt.x(), pt.y(), pt.z());
-        BlockState state = PaperLib.getBlockState(block, false).getState();
-        if (!(state instanceof InventoryHolder)) {
+        BlockState state;
+        if (PaperSupport.isPaper()) {
+            state = block.getState(false);
+        } else {
+            state = block.getState();
+        }
+        if (!(state instanceof InventoryHolder chest)) {
             return false;
         }
 
         //FAWE-Folia start - container contents belong to the region owning that block
         RegionSync.supply(getWorld(), pt.x(), pt.y(), pt.z(), () -> {
-            InventoryHolder chest = (InventoryHolder) state;
             Inventory inven = chest.getInventory();
             if (chest instanceof Chest) {
                 inven = ((Chest) chest).getBlockInventory();
@@ -412,12 +416,12 @@ public class BukkitWorld extends AbstractWorld {
         //FAWE-Folia start - isMainThread means nothing on a regionised server, and a synchronous getChunkAt from
         // the wrong region is exactly what it forbids; the asynchronous load is always correct there
         if (FaweScheduler.isFolia()) {
-            PaperLib.getChunkAtAsync(world, X, Z, true);
+            world.getChunkAtAsync(X, Z, true);
         } else if (Fawe.isMainThread()) {
             //FAWE-Folia end
             world.getChunkAt(X, Z);
-        } else if (PaperLib.isPaper()) {
-            PaperLib.getChunkAtAsync(world, X, Z, true);
+        } else if (PaperSupport.isPaper()) {
+            world.getChunkAtAsync(X, Z, true);
         }
         //FAWE end
     }
@@ -466,6 +470,7 @@ public class BukkitWorld extends AbstractWorld {
         }
     }
 
+    @Deprecated
     @Override
     public boolean playEffect(Vector3 position, int type, int data) {
         World world = getWorld();
@@ -697,12 +702,6 @@ public class BukkitWorld extends AbstractWorld {
         }
 
         return false;
-    }
-
-    @Override
-    public boolean fullySupports3DBiomes() {
-        // Supports if API does and we're not in the overworld
-        return HAS_3D_BIOMES && getWorld().getEnvironment() != World.Environment.NORMAL || PaperLib.isVersion(18);
     }
 
     @SuppressWarnings("deprecation")
