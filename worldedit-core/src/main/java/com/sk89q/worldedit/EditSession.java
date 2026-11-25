@@ -815,7 +815,12 @@ public class EditSession extends PassthroughExtent implements AutoCloseable {
                     }
                 }
 
-                actor.print(Caption.of("fawe.error.worldedit.some.fails.blockbag", str.toString()));
+                // Sessions created by other plugins may have no actor
+                if (actor != null) {
+                    actor.print(Caption.of("fawe.error.worldedit.some.fails.blockbag", str.toString()));
+                } else {
+                    LOGGER.warn("Some blocks could not be placed, missing from the block bag: {}", str);
+                }
             }
         }
         return Collections.emptyMap();
@@ -1337,12 +1342,25 @@ public class EditSession extends PassthroughExtent implements AutoCloseable {
         // Check fails
         FaweLimit used = getLimitUsed();
         if (used.MAX_FAILS.get() > 0) {
+            // Sessions created by other plugins may have no actor: log instead of failing with a NPE that hides the cause
             if (used.MAX_CHANGES.get() > 0 || used.MAX_ENTITIES.get() > 0) {
-                actor.print(Caption.of("fawe.error.worldedit.some.fails", used.MAX_FAILS));
+                if (actor != null) {
+                    actor.print(Caption.of("fawe.error.worldedit.some.fails", used.MAX_FAILS));
+                } else {
+                    LOGGER.warn("{} changes of an edit without actor failed because a limit was reached", used.MAX_FAILS);
+                }
             } else if (new ExtentTraverser<>(getExtent()).findAndGet(FaweRegionExtent.class) != null) {
-                actor.print(Caption.of("fawe.cancel.reason.outside.region"));
+                if (actor != null) {
+                    actor.print(Caption.of("fawe.cancel.reason.outside.region"));
+                } else {
+                    LOGGER.warn("{} changes of an edit without actor were outside the allowed region", used.MAX_FAILS);
+                }
             } else {
-                actor.print(Caption.of("fawe.cancel.reason.outside.level"));
+                if (actor != null) {
+                    actor.print(Caption.of("fawe.cancel.reason.outside.level"));
+                } else {
+                    LOGGER.warn("{} changes of an edit without actor were outside the world", used.MAX_FAILS);
+                }
             }
         }
         if (wnaMode) {
@@ -1366,8 +1384,11 @@ public class EditSession extends PassthroughExtent implements AutoCloseable {
                 }
             }
         } catch (Throwable e) {
-            actor.print(Caption.of("fawe.error.lighting"));
-            e.printStackTrace();
+            // Log first: the actor may be null, and the message alone does not say what failed
+            LOGGER.error("Error while relighting an edit", e);
+            if (actor != null) {
+                actor.print(Caption.of("fawe.error.lighting"));
+            }
         }
         // Cancel any preloader associated with the actor if present
         if (getActor() instanceof Player) {
