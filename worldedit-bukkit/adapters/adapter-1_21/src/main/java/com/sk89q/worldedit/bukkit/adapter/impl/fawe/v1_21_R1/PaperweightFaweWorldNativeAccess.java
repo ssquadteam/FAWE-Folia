@@ -61,8 +61,18 @@ public class PaperweightFaweWorldNativeAccess implements WorldNativeAccess<Level
         this.level = level;
         // Use the actual tick as minecraft-defined so we don't try to force blocks into the world when the server's already lagging.
         //  - With the caveat that we don't want to have too many cached changed (1024) so we'd flush those at 1024 anyway.
-        this.lastTick = new AtomicInteger(MinecraftServer.currentTick);
+        this.lastTick = new AtomicInteger(currentTick());
     }
+
+    //FAWE-Folia start - MinecraftServer.currentTick does not exist on Folia (ticks are per region, there is
+    // no global one), so reading it there throws NoSuchFieldError. Fall back to a wall-clock tick count.
+    private static int currentTick() {
+        if (FaweScheduler.isFolia()) {
+            return (int) (System.nanoTime() / 50_000_000L);
+        }
+        return MinecraftServer.currentTick;
+    }
+    //FAWE-Folia end
 
     private Level getLevel() {
         return Objects.requireNonNull(level.get(), "The reference to the world was lost");
@@ -97,7 +107,7 @@ public class PaperweightFaweWorldNativeAccess implements WorldNativeAccess<Level
             LevelChunk levelChunk, BlockPos blockPos,
             net.minecraft.world.level.block.state.BlockState blockState
     ) {
-        int currentTick = MinecraftServer.currentTick;
+        int currentTick = currentTick();
         if (Fawe.isMainThread()) {
             return levelChunk.setBlockState(blockPos, blockState,
                     this.sideEffectSet != null && this.sideEffectSet.shouldApply(SideEffect.UPDATE)
