@@ -7,13 +7,19 @@ import com.fastasyncworldedit.core.math.IntPair;
 import com.fastasyncworldedit.core.queue.IChunkGet;
 import com.fastasyncworldedit.core.util.MathMan;
 import com.fastasyncworldedit.core.util.ReflectionUtils;
+import com.github.ssquadteam.fawe.scheduler.FaweScheduler;
+import com.github.ssquadteam.fawe.scheduler.RegionSync;
+import com.sk89q.worldedit.internal.util.LogManagerCompat;
 import com.sk89q.worldedit.world.block.BlockTypesCache;
+import org.apache.logging.log4j.Logger;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.StampedLock;
 import java.util.function.IntFunction;
 
 public class NMSAdapter implements FAWEPlatformAdapterImpl {
+
+    private static final Logger SEND_LOGGER = LogManagerCompat.getLogger();
 
     public static int createPalette(
             int[] blockToPalette,
@@ -211,6 +217,54 @@ public class NMSAdapter implements FAWEPlatformAdapterImpl {
             return null;
         });
     }
+
+    //FAWE-Folia start - send edited chunks through the server's own refresh
+    /**
+     * Send a chunk to the players that see it on a regionised server.
+     *
+     * <p>The adapters build the chunk packet themselves, with a constructor that is compiled against Paper and resolved
+     * lazily, inside a task whose failures are easy to miss. On Folia and its forks the packet is left to the server:
+     * {@link org.bukkit.World#refreshChunk(int, int)} runs on the region owning the chunk, and any failure is logged.</p>
+     *
+     * @return true if the server is regionised and the send was handled here
+     */
+    @SuppressWarnings("deprecation")
+    protected static boolean sendChunkFolia(org.bukkit.World world, IntPair pair, int chunkX, int chunkZ) {
+        if (!FaweScheduler.isFolia()) {
+            return false;
+        }
+        StampLockHolder lockHolder = new StampLockHolder();
+        beginChunkPacketSend(world.getName(), pair, lockHolder);
+        if (lockHolder.chunkLock == null) {
+            SEND_LOGGER.debug("Chunk {},{} of world {} not sent: a send or a section write is still pending for it",
+                    chunkX, chunkZ, world.getName());
+            return true;
+        }
+        try {
+            RegionSync.dispatch(world, chunkX << 4, 0, chunkZ << 4, () -> {
+                try {
+                    if (!world.isChunkLoaded(chunkX, chunkZ)) {
+                        SEND_LOGGER.debug("Chunk {},{} of world {} not sent: it is not loaded", chunkX, chunkZ, world.getName());
+                    } else if (!world.refreshChunk(chunkX, chunkZ)) {
+                        SEND_LOGGER.debug("Chunk {},{} of world {} not sent: the server has nobody to send it to",
+                                chunkX, chunkZ, world.getName());
+                    } else if (SEND_LOGGER.isDebugEnabled()) {
+                        SEND_LOGGER.debug("Sent chunk {},{} of world {} to {} player(s)", chunkX, chunkZ, world.getName(),
+                                world.getPlayersSeeingChunk(chunkX, chunkZ).size());
+                    }
+                } catch (Throwable t) {
+                    SEND_LOGGER.error("Could not send chunk {},{} of world {} to players", chunkX, chunkZ, world.getName(), t);
+                } finally {
+                    endChunkPacketSend(world.getName(), pair, lockHolder);
+                }
+            });
+        } catch (Throwable t) {
+            endChunkPacketSend(world.getName(), pair, lockHolder);
+            SEND_LOGGER.error("Could not schedule sending chunk {},{} of world {}", chunkX, chunkZ, world.getName(), t);
+        }
+        return true;
+    }
+    //FAWE-Folia end
 
     public static final class StampLockHolder {
         public long stamp;

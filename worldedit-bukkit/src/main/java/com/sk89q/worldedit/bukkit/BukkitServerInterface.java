@@ -19,11 +19,15 @@
 
 package com.sk89q.worldedit.bukkit;
 
+import com.fastasyncworldedit.bukkit.adapter.FoliaRelighter;
 import com.fastasyncworldedit.bukkit.adapter.NMSRelighterFactory;
+import com.fastasyncworldedit.bukkit.adapter.StarlightRelighter;
 import com.fastasyncworldedit.bukkit.util.MinecraftVersion;
+import com.fastasyncworldedit.bukkit.util.PaperSupport;
 import com.github.ssquadteam.fawe.scheduler.FaweScheduler;
 import com.fastasyncworldedit.core.configuration.Settings;
 import com.fastasyncworldedit.core.extent.processor.PlacementStateProcessor;
+import com.fastasyncworldedit.core.extent.processor.lighting.Relighter;
 import com.fastasyncworldedit.core.extent.processor.lighting.RelighterFactory;
 import com.fastasyncworldedit.core.queue.IBatchProcessor;
 import com.google.common.collect.Sets;
@@ -48,7 +52,6 @@ import com.sk89q.worldedit.util.SideEffect;
 import com.sk89q.worldedit.util.lifecycle.Lifecycled;
 import com.sk89q.worldedit.world.DataFixer;
 import com.sk89q.worldedit.world.registry.Registries;
-import io.papermc.lib.PaperLib;
 import org.apache.logging.log4j.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.Server;
@@ -274,7 +277,7 @@ public class BukkitServerInterface extends AbstractPlatform implements MultiUser
 
     @Override
     public long getTickCount() {
-        if (PaperLib.isPaper()) {
+        if (PaperSupport.isPaper()) {
             return Bukkit.getCurrentTick();
         }
         return super.getTickCount();
@@ -298,15 +301,26 @@ public class BukkitServerInterface extends AbstractPlatform implements MultiUser
     public @Nonnull
     RelighterFactory getRelighterFactory() {
         if (this.relighterFactory == null) {
-            //FAWE-Folia start - the starlight relighter cannot be driven safely across regions
-            // It batches up to 32x32 chunks, which may span several regions, then loads them, tickets them and calls
-            // the server's light engine for the whole batch from the global region thread. Folia gives no way to split
-            // a batch by owning region, so FAWE's own relighter - which works through the same queue as block writes,
-            // and is therefore already routed to the right owner - is used instead.
+            //FAWE-Folia start - never fall back to NMSRelighter on a regionised server
+            // The server's own relight (starlight) is used there too: it tickets the chunks, runs on the light executor
+            // and sends the light packets from each chunk's region by itself. FAWE's NMSRelighter is not usable: its
+            // block light propagation never converges there and fills the heap, so FoliaRelighter (no relight) replaces it.
             if (FaweScheduler.isFolia()) {
-                this.relighterFactory = new NMSRelighterFactory();
-                LOGGER.info("Using {} as relighter factory: the starlight relighter is not usable on a regionised "
-                        + "server.", this.relighterFactory.getClass().getCanonicalName());
+                RelighterFactory adapterFactory = this.plugin.getBukkitImplAdapter().getRelighterFactory();
+                if (adapterFactory instanceof NMSRelighterFactory) {
+                    this.relighterFactory = (relightMode, world, queue) -> new FoliaRelighter();
+                    LOGGER.info("Using {} as relighter: edits are not relit on this server.",
+                            FoliaRelighter.class.getCanonicalName());
+                } else {
+                    this.relighterFactory = (relightMode, world, queue) -> {
+                        Relighter relighter = adapterFactory.createRelighter(relightMode, world, queue);
+                        if (relighter instanceof StarlightRelighter<?, ?> starlight) {
+                            starlight.setFoliaWorld(Bukkit.getWorld(world.getName()));
+                        }
+                        return relighter;
+                    };
+                    LOGGER.info("Using {} as relighter factory.", adapterFactory.getClass().getCanonicalName());
+                }
                 return this.relighterFactory;
             }
             //FAWE-Folia end

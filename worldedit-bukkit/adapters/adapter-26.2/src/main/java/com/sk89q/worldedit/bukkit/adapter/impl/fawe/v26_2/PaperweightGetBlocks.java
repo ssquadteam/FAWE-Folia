@@ -3,6 +3,7 @@ package com.sk89q.worldedit.bukkit.adapter.impl.fawe.v26_2;
 import com.fastasyncworldedit.bukkit.adapter.AbstractBukkitGetBlocks;
 import com.fastasyncworldedit.bukkit.adapter.DelegateSemaphore;
 import com.fastasyncworldedit.bukkit.adapter.NativeEntityFunctionSet;
+import com.fastasyncworldedit.bukkit.util.PaperSupport;
 import com.fastasyncworldedit.core.FaweCache;
 import com.fastasyncworldedit.core.configuration.Settings;
 import com.fastasyncworldedit.core.extent.processor.heightmap.HeightMapType;
@@ -25,7 +26,6 @@ import com.sk89q.worldedit.util.SideEffect;
 import com.sk89q.worldedit.util.formatting.text.TextComponent;
 import com.sk89q.worldedit.world.biome.BiomeType;
 import com.sk89q.worldedit.world.block.BlockTypesCache;
-import io.papermc.lib.PaperLib;
 import io.papermc.paper.event.block.BeaconDeactivatedEvent;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -47,10 +47,9 @@ import net.minecraft.world.level.block.entity.BeaconBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.DataLayer;
-import net.minecraft.world.level.chunk.HashMapPalette;
+import net.minecraft.world.level.chunk.GlobalPalette;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
-import net.minecraft.world.level.chunk.LinearPalette;
 import net.minecraft.world.level.chunk.Palette;
 import net.minecraft.world.level.chunk.PalettedContainer;
 import net.minecraft.world.level.chunk.PalettedContainerRO;
@@ -198,7 +197,9 @@ public class PaperweightGetBlocks extends AbstractBukkitGetBlocks<ServerLevel, L
 
     @Override
     public FaweCompoundTag tile(final int x, final int y, final int z) {
-        BlockEntity blockEntity = getChunk().getBlockEntity(new BlockPos((x & 15) + (
+        // Read the map directly: LevelChunk#getBlockEntity(BlockPos) looks at the current region data on Folia,
+        // which is null on FAWE threads (e.g. while relighting)
+        BlockEntity blockEntity = getChunk().getBlockEntities().get(new BlockPos((x & 15) + (
                 chunkX << 4), y, (z & 15) + (
                 chunkZ << 4)));
         if (blockEntity == null) {
@@ -344,46 +345,54 @@ public class PaperweightGetBlocks extends AbstractBukkitGetBlocks<ServerLevel, L
             }
             copies.put(copyKey, copy);
         }
-        // Remove existing tiles. Create a copy so that we can remove blocks
-        Map<BlockPos, BlockEntity> chunkTiles = new HashMap<>(nmsChunk.getBlockEntities());
-        List<BlockEntity> beacons = null;
-        if (!chunkTiles.isEmpty()) {
-            for (Map.Entry<BlockPos, BlockEntity> entry : chunkTiles.entrySet()) {
-                final BlockPos pos = entry.getKey();
-                final int lx = pos.getX() & 15;
-                final int ly = pos.getY();
-                final int lz = pos.getZ() & 15;
-                final int layer = ly >> 4;
-                if (!set.hasSection(layer)) {
-                    continue;
-                }
-
-                int ordinal = set.getBlock(lx, ly, lz).getOrdinal();
-                if (ordinal != BlockTypesCache.ReservedIDs.__RESERVED__) {
-                    BlockEntity tile = entry.getValue();
-                    if (PaperLib.isPaper() && tile instanceof BeaconBlockEntity) {
-                        if (beacons == null) {
-                            beacons = new ArrayList<>();
-                        }
-                        beacons.add(tile);
-                        //FAWE-Folia start - the beacon's own region owns its block entity
-                        RegionSync.dispatch(
-                                nmsWorld.getWorld(),
-                                tile.getBlockPos().getX(),
-                                tile.getBlockPos().getY(),
-                                tile.getBlockPos().getZ(),
-                                () -> PaperweightPlatformAdapter.removeBeacon(tile, nmsChunk)
-                        );
-                        //FAWE-Folia end
+        //TODO: optimise
+        //FAWE-Folia start - upstream moved block entity removal onto the main thread; on a regionised server the
+        // region owning this chunk is the only thread allowed to touch its block entities (off Folia this is
+        // exactly TaskManager#sync, as upstream wrote it)
+        List<BlockEntity> beacons = RegionSync.supply(nmsWorld.getWorld(), chunkX << 4, 0, chunkZ << 4, () -> {
+        //FAWE-Folia end
+            // Remove existing tiles. Create a copy so that we can remove blocks
+            Map<BlockPos, BlockEntity> chunkTiles = new HashMap<>(nmsChunk.getBlockEntities());
+            List<BlockEntity> beaconEntities = null;
+            if (!chunkTiles.isEmpty()) {
+                for (Map.Entry<BlockPos, BlockEntity> entry : chunkTiles.entrySet()) {
+                    final BlockPos pos = entry.getKey();
+                    final int lx = pos.getX() & 15;
+                    final int ly = pos.getY();
+                    final int lz = pos.getZ() & 15;
+                    final int layer = ly >> 4;
+                    if (!set.hasSection(layer)) {
                         continue;
                     }
-                    nmsChunk.removeBlockEntity(tile.getBlockPos());
-                    if (createCopy) {
-                        copy.storeTile(tile);
+
+                    int ordinal = set.getBlock(lx, ly, lz).getOrdinal();
+                    if (ordinal != BlockTypesCache.ReservedIDs.__RESERVED__) {
+                        BlockEntity tile = entry.getValue();
+                        if (PaperSupport.isPaper() && tile instanceof BeaconBlockEntity) {
+                            if (beaconEntities == null) {
+                                beaconEntities = new ArrayList<>();
+                            }
+                            beaconEntities.add(tile);
+                            //FAWE-Folia start - the beacon's own region owns its block entity
+                            RegionSync.dispatch(
+                                    nmsWorld.getWorld(),
+                                    tile.getBlockPos().getX(),
+                                    tile.getBlockPos().getY(),
+                                    tile.getBlockPos().getZ(),
+                                    () -> PaperweightPlatformAdapter.removeBeacon(tile, nmsChunk)
+                            );
+                            //FAWE-Folia end
+                            continue;
+                        }
+                        nmsChunk.removeBlockEntity(tile.getBlockPos());
+                        if (createCopy) {
+                            copy.storeTile(tile);
+                        }
                     }
                 }
             }
-        }
+            return beaconEntities;
+        });
         final BiomeType[][] biomes = set.getBiomes();
 
         int bitMask = 0;
@@ -695,7 +704,7 @@ public class PaperweightGetBlocks extends AbstractBukkitGetBlocks<ServerLevel, L
                                 if (!set.getSideEffectSet().shouldApply(SideEffect.ENTITY_EVENTS)) {
                                     entity.spawnReason = CreatureSpawnEvent.SpawnReason.CUSTOM;
                                     entity.generation = false;
-                                    if (PaperLib.isPaper()) {
+                                    if (PaperSupport.isPaper()) {
                                         if (!nmsWorld.moonrise$getEntityLookup().addNewEntity(entity, false)) {
                                             onError.run();
                                         }
@@ -867,7 +876,7 @@ public class PaperweightGetBlocks extends AbstractBukkitGetBlocks<ServerLevel, L
                 new BitArrayUnstretched(bitsPerEntry, 4096, blockStates).toRaw(data);
 
                 int num_palette;
-                if (palette instanceof LinearPalette || palette instanceof HashMapPalette) {
+                if (!(palette instanceof GlobalPalette)) {
                     num_palette = palette.getSize();
                 } else {
                     // The section's palette is the global block palette.
@@ -1065,7 +1074,7 @@ public class PaperweightGetBlocks extends AbstractBukkitGetBlocks<ServerLevel, L
                             dataObject);
                     int paletteSize;
 
-                    if (palette instanceof LinearPalette || palette instanceof HashMapPalette) {
+                    if (!(palette instanceof GlobalPalette)) {
                         paletteSize = palette.getSize();
                     } else {
                         super.trim(false, i);
