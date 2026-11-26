@@ -105,10 +105,15 @@ into `worldedit-core`, which has no Bukkit classes of its own.
   fire on many region threads at once. It is deprecated and untouched since 1.12, so it is
   disabled with a warning rather than made thread-safe. Set `tick-limiter.enabled` to
   `false` to silence the warning.
-- **Lighting uses FAWE's own relighter, not starlight.** `StarlightRelighter` batches up to
-  32x32 chunks - more than one region - and drives the server light engine for the whole
-  batch from the global region thread, which cannot be split by owner. Expect relighting to
-  behave as it does on a server without the starlight relighter available.
+- **Chunks are sent as they are written, and relit by the server afterwards.** Each edited
+  chunk is sent to its viewers from its own region right after its sections are written
+  (`AbstractBukkitGetBlocks#handleCallFinalizer`), not when the relighter finishes. Light is
+  then recomputed by the adapter's `StarlightRelighter`, which hands each loaded chunk, from its
+  own region, to the server's own relight; the server sends the light packets itself, so the delayed chunk send
+  is skipped on Folia. `NMSRelighter` is never used there: on Canvas 26.3 its block light
+  propagation never converged, the edit never finished and the heap filled up. Where an
+  adapter would fall back to it, `FoliaRelighter` (a no-op) is used and edits are not relit.
+  Set `lighting.mode: 0` to turn relighting off.
 - **Dynamic chunk rendering hops threads.** `RenderListener`'s timer walks every player from
   the global region thread, so each `setViewDistance` is dispatched to its own player and
   applies a tick or so later than it would elsewhere.

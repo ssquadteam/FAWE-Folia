@@ -5,6 +5,8 @@ import com.fastasyncworldedit.core.extent.processor.lighting.Relighter;
 import com.fastasyncworldedit.core.queue.IQueueExtent;
 import com.fastasyncworldedit.core.util.MathMan;
 import com.fastasyncworldedit.core.util.TaskManager;
+import com.github.ssquadteam.fawe.scheduler.FaweScheduler;
+import com.github.ssquadteam.fawe.scheduler.RegionSync;
 import com.sk89q.worldedit.internal.util.LogManagerCompat;
 import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArraySet;
@@ -18,6 +20,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
@@ -41,6 +44,16 @@ public abstract class StarlightRelighter<SERVER_LEVEL, CHUNK_POS> implements Rel
     private final ReentrantLock areaLock = new ReentrantLock();
     private final NMSRelighter delegate;
     protected final SERVER_LEVEL serverLevel;
+    //FAWE-Folia start - the world is needed to reach each chunk's region
+    private volatile org.bukkit.World foliaWorld;
+
+    /**
+     * Set the Bukkit world of this relighter. Required on a regionised server, where every chunk is relit from its region.
+     */
+    public void setFoliaWorld(org.bukkit.World world) {
+        this.foliaWorld = world;
+    }
+    //FAWE-Folia end
 
     protected StarlightRelighter(SERVER_LEVEL serverLevel, IQueueExtent<?> queue) {
         this.serverLevel = serverLevel;
@@ -98,6 +111,12 @@ public abstract class StarlightRelighter<SERVER_LEVEL, CHUNK_POS> implements Rel
      * (as required by the server).
      */
     protected void fixLighting(LongSet chunks, Runnable andThen) {
+        //FAWE-Folia start - relight every chunk from its own region
+        if (FaweScheduler.isFolia()) {
+            fixLightingFolia(chunks, andThen);
+            return;
+        }
+        //FAWE-Folia end
         Set<CHUNK_POS> coords = convertChunkKeysToChunkPos(chunks);
         TaskManager.taskManager().task(() -> {
             // trigger chunk load and apply ticket on main thread
@@ -113,6 +132,66 @@ public abstract class StarlightRelighter<SERVER_LEVEL, CHUNK_POS> implements Rel
             );
         });
     }
+
+    //FAWE-Folia start - relight every chunk from its own region
+    /*
+     * There is no thread that may touch a whole batch on a regionised server, so each loaded chunk is handed to the
+     * server's relight on its own, from the region owning it. The server tickets the chunk, relights it on its light
+     * executor and sends the light packets by itself. Chunks that are not loaded are skipped: nobody sees them, and
+     * scheduling on them would load them.
+     */
+    private void fixLightingFolia(LongSet chunks, Runnable andThen) {
+        org.bukkit.World world = this.foliaWorld;
+        if (world == null) {
+            LOGGER.warn("Cannot relight {} chunk(s): the relighter was not given its world", chunks.size());
+            TaskManager.taskManager().async(andThen);
+            return;
+        }
+        final int total = chunks.size();
+        final AtomicInteger pending = new AtomicInteger(total);
+        final AtomicInteger relit = new AtomicInteger();
+        final AtomicInteger skipped = new AtomicInteger();
+        final Runnable chunkDone = () -> {
+            if (pending.decrementAndGet() == 0) {
+                LOGGER.debug("Relit {} of {} chunk(s) of world {} ({} not loaded)", relit.get(), total, world.getName(),
+                        skipped.get());
+                TaskManager.taskManager().async(andThen);
+            }
+        };
+        LOGGER.debug("Relighting {} chunk(s) of world {}", total, world.getName());
+        LongIterator iterator = chunks.iterator();
+        while (iterator.hasNext()) {
+            final long key = iterator.nextLong();
+            // The keys come from asLong, which packs like ChunkPos in every version: x in the low half, z in the high one
+            final int x = (int) key;
+            final int z = (int) (key >>> 32);
+            try {
+                if (!world.isChunkLoaded(x, z)) {
+                    skipped.incrementAndGet();
+                    chunkDone.run();
+                    continue;
+                }
+                RegionSync.dispatch(world, x << 4, 0, z << 4, () -> {
+                    try {
+                        Set<CHUNK_POS> single = new HashSet<>();
+                        single.add(createChunkPos(key));
+                        invokeRelight(single, c -> {
+                        }, i -> {
+                            relit.addAndGet(i);
+                            chunkDone.run();
+                        });
+                    } catch (Throwable t) {
+                        LOGGER.error("Could not relight chunk {},{} of world {}", x, z, world.getName(), t);
+                        chunkDone.run();
+                    }
+                });
+            } catch (Throwable t) {
+                LOGGER.error("Could not schedule relighting chunk {},{} of world {}", x, z, world.getName(), t);
+                chunkDone.run();
+            }
+        }
+    }
+    //FAWE-Folia end
 
     @Override
     public boolean addChunk(int cx, int cz, byte[] skipReason, int bitmask) {

@@ -143,8 +143,8 @@ From FOLIA.md and the code, not from testing:
 
 - **Teleports are asynchronous** and report success optimistically (`//up`, `//jumpto`,
   `//thru`, `//unstuck`, and anything else that calls `setPosition`).
-- **Lighting:** FAWE's own relighter is used, not the starlight one. Large edits may relight
-  differently and more slowly than on Paper.
+- **Lighting:** edited chunks are sent as soon as they are written and relit afterwards through
+  the server's own relight. Both were checked by hand on Canvas 26.3 with `//set`. See FOLIA.md.
 - **Tick limiter is disabled** (warning in the log if `tick-limiter.enabled` is true).
 - **`//regen`:** the drain timer runs on the region owning the selection's minimum corner. A
   regen over several regions still drives everything from that one region. It is the fork's

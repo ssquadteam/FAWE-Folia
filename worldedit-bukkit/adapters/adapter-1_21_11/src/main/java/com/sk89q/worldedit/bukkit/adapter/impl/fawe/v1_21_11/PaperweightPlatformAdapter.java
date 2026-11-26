@@ -354,6 +354,11 @@ public final class PaperweightPlatformAdapter extends NMSAdapter {
 
     @SuppressWarnings("deprecation")
     public static void sendChunk(IntPair pair, ServerLevel nmsWorld, int chunkX, int chunkZ) {
+        //FAWE-Folia start - on a regionised server the chunk is sent through the server's own refresh
+        if (sendChunkFolia(nmsWorld.getWorld(), pair, chunkX, chunkZ)) {
+            return;
+        }
+        //FAWE-Folia end
         ChunkHolder chunkHolder = getPlayerChunk(nmsWorld, chunkX, chunkZ);
         if (chunkHolder == null) {
             return;

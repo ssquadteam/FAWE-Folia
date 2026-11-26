@@ -187,7 +187,15 @@ public abstract class AbstractBukkitGetBlocks<ServerLevel, LevelChunk> extends C
                 CompletableFuture<Future<?>> regionResult = new CompletableFuture<>();
                 FaweScheduler.scheduler().runAtLocation(anchor, () -> {
                     try {
-                        regionResult.complete(chain.call());
+                        Future<?> next = chain.call();
+                        // The sections are written and this thread owns the chunk: send it now rather than relying on
+                        // the relighter to do it once the whole edit is flushed.
+                        try {
+                            send();
+                        } catch (Throwable e) {
+                            LOGGER.error("Could not send chunk {},{} after writing it", chunkX, chunkZ, e);
+                        }
+                        regionResult.complete(next);
                     } catch (Throwable e) {
                         regionResult.completeExceptionally(e);
                     }
